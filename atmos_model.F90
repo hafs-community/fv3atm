@@ -2731,6 +2731,8 @@ end subroutine atmos_data_type_chksum
     type(ESMF_StaggerLoc) :: staggerloc
     integer, allocatable  :: lsmask(:,:)
     integer(kind=ESMF_KIND_I4), pointer  :: maskPtr(:,:)
+    type(ESMF_DistGrid) :: distgrid
+    integer :: localDeCount
 !
     isc = GFS_control%isc
     iec = GFS_control%isc+GFS_control%nx-1
@@ -2762,20 +2764,27 @@ end subroutine atmos_data_type_chksum
 !     'TlBnd=',TlBnd,'TUbnd=',TUbnd,'Tcount=',Tcount
 !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-    call ESMF_GridGetItem(fcstGrid, itemflag=ESMF_GRIDITEM_MASK,   &
-                          staggerloc=ESMF_STAGGERLOC_CENTER,farrayPtr=maskPtr, rc=rc)
-!    print *,'in set up grid, aft get maskptr, rc=',rc, 'size=',size(maskPtr,1),size(maskPtr,2), &
-!      'bound(maskPtr)=', LBOUND(maskPtr,1),LBOUND(maskPtr,2),UBOUND(maskPtr,1),UBOUND(maskPtr,2)
+    call ESMF_GridGet(fcstGrid, distgrid=distgrid, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+    call ESMF_DistGridGet(distgrid, localDeCount=localDeCount, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    if (localDeCount.gt.0) then
+      call ESMF_GridGetItem(fcstGrid, itemflag=ESMF_GRIDITEM_MASK,   &
+                            staggerloc=ESMF_STAGGERLOC_CENTER,farrayPtr=maskPtr, rc=rc)
+!      print *,'in set up grid, aft get maskptr, rc=',rc, 'size=',size(maskPtr,1),size(maskPtr,2), &
+!        'bound(maskPtr)=', LBOUND(maskPtr,1),LBOUND(maskPtr,2),UBOUND(maskPtr,1),UBOUND(maskPtr,2)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 !
 !$omp parallel do default(shared) private(i,j)
-    do j=jsc,jec
-      do i=isc,iec
-        maskPtr(i-isc+1,j-jsc+1) = lsmask(i,j)
+      do j=jsc,jec
+        do i=isc,iec
+          maskPtr(i-isc+1,j-jsc+1) = lsmask(i,j)
+        enddo
       enddo
-    enddo
 !      print *,'in set set lsmask, maskPtr=', maxval(maskPtr), minval(maskPtr)
 !
+    endif
     deallocate(lsmask)
 
   end subroutine addLsmask2grid
