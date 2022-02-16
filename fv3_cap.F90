@@ -40,7 +40,7 @@ module fv3gfs_cap_mod
                                     nsout_io, iau_offset, lflname_fulltime
 !
   use module_fcst_grid_comp,  only: fcstSS => SetServices,                   &
-                                    numLevels, numSoilLayers,      &
+                                    numLevels, numSoilLayers,                &
                                     numTracers, mygrid, grid_number_on_all_pets
 
   use module_wrt_grid_comp,   only: wrtSS => SetServices
@@ -1127,9 +1127,6 @@ module fv3gfs_cap_mod
         if (ESMF_LogFoundError(rcToCheck=urc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
       enddo
     endif
-
-    call ESMF_VMBarrier(vm=vm, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc,  msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     call ESMF_GridCompFinalize(fcstComp, exportState=fcststate,userRc=urc, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc,  msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
