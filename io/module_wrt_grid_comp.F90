@@ -413,6 +413,22 @@
         imo(n) = (lon2(n)-lon1(n))/dlon(n) + 1
         jmo(n) = (lat2(n)-lat1(n))/dlat(n) + 1
         if (lprnt) then
+          print *,'cen_lon=',cen_lon(n),' cen_lat=',cen_lat(n)
+          print *,'lon1   =',lon1(n),   ' lat1   =',lat1(n)
+          print *,'lon2   =',lon2(n),   ' lat2   =',lat2(n)
+          print *,'dlon   =',dlon(n),   ' dlat   =',dlat(n)
+          print *,'imo    =',imo(n),    ' jmo    =',jmo(n)
+        end if
+      else if (trim(output_grid(n)) == 'rotated_latlon_moving') then
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=lon1(n),    label ='lon1:',   rc=rc)
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=lat1(n),    label ='lat1:',   rc=rc)
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=lon2(n),    label ='lon2:',   rc=rc)
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=lat2(n),    label ='lat2:',   rc=rc)
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=dlon(n),    label ='dlon:',   rc=rc)
+        call ESMF_ConfigGetAttribute(config=cf_output_grid, value=dlat(n),    label ='dlat:',   rc=rc)
+        imo(n) = (lon2(n)-lon1(n))/dlon(n) + 1
+        jmo(n) = (lat2(n)-lat1(n))/dlat(n) + 1
+        if (lprnt) then
           print *,'lon1=',lon1(n),' lat1=',lat1(n)
           print *,'lon2=',lon2(n),' lat2=',lat2(n)
           print *,'dlon=',dlon(n),' dlat=',dlat(n)
@@ -700,6 +716,7 @@
 
       else if ( trim(output_grid(n)) == 'regional_latlon' .or. &
                 trim(output_grid(n)) == 'rotated_latlon'  .or. &
+                trim(output_grid(n)) == 'rotated_latlon_moving'  .or. &
                 trim(output_grid(n)) == 'lambert_conformal' ) then
 
         wrtGrid(n) = ESMF_GridCreateNoPeriDim(minIndex=(/1,1/),                                        &
@@ -739,6 +756,9 @@
               latPtr(i,j) = geo_lat
             enddo
             enddo
+            wrt_int_state%post_maptype = 207
+        else if ( trim(output_grid(n)) == 'rotated_latlon_moving' ) then
+            ! Do not compute lonPtr, latPtr here. Will be done in the run phase
             wrt_int_state%post_maptype = 207
         else if ( trim(output_grid(n)) == 'lambert_conformal' ) then
             lon1_r8 = dble(lon1(n))
@@ -1116,7 +1136,8 @@
               call ESMF_AttributeSet(wrt_int_state%wrtFB(i), convention="NetCDF", purpose="FV3", &
                                      name="dlat", value=dlat(grid_id), rc=rc)
 
-            else if (trim(output_grid(grid_id)) == 'rotated_latlon') then
+            else if (trim(output_grid(grid_id)) == 'rotated_latlon' &
+                .or. trim(output_grid(grid_id)) == 'rotated_latlon_moving') then
 
               call ESMF_AttributeSet(wrt_int_state%wrtFB(i), convention="NetCDF", purpose="FV3", &
                                      name="grid", value="rotated_latlon", rc=rc)
@@ -1129,6 +1150,7 @@
                                                 "lat2   ",&
                                                 "dlon   ",&
                                                 "dlat   "/), rc=rc)
+              ! for 'rotated_latlon_moving' cen_lon and cen_lat will be overwritten in run phase
               call ESMF_AttributeSet(wrt_int_state%wrtFB(i), convention="NetCDF", purpose="FV3", &
                                      name="cen_lon", value=cen_lon(grid_id), rc=rc)
               call ESMF_AttributeSet(wrt_int_state%wrtFB(i), convention="NetCDF", purpose="FV3", &
@@ -1685,6 +1707,17 @@
 
       logical :: use_parallel_netcdf
       logical :: lprnt
+
+      integer                                       :: ii, jj
+      type(ESMF_Grid)                               :: grid
+      real(ESMF_KIND_R8), dimension(:,:), pointer   :: lonPtr, latPtr
+      real(ESMF_KIND_R8)                            :: rot_lon, rot_lat
+      real(ESMF_KIND_R8)                            :: geo_lon, geo_lat
+
+      ! FOR TESTING ONLY, DO NOT COMMIT
+      real(8), dimension(7) :: clon = [-86.3, -89.0197345, -93.0, -98.0, -101.0, -104.0, -106.0]
+      real(8), dimension(7) :: clat = [ 23.3,  26.0131657,  30.0,  33.0,   36.0,   38.0,   39.0]
+      integer, save :: nout = 0
 !
 !-----------------------------------------------------------------------
 !***********************************************************************
@@ -1692,6 +1725,8 @@
 !
       tbeg = MPI_Wtime()
       rc   = esmf_success
+
+      nout = nout + 1  ! FOR TESTING ONLY, DO NOT COMMIT
 !
 !-----------------------------------------------------------------------
 !***  get the current write grid comp name, and internal state
@@ -1824,6 +1859,41 @@
           srcTermProcessing = 1 ! have this fixed for bit-for-bit reproducibility
           ! RegridStore()
 call ESMF_TraceRegionEnter("ESMF_FieldBundleRegridStore()", rc=rc)
+
+          ! update output grid coordinates based of fcstgrid center lat/lon
+          call ESMF_FieldBundleGet(file_bundle, grid=grid, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          call ESMF_GridGetCoord(grid, coordDim=1, farrayPtr=lonPtr, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          call ESMF_GridGetCoord(grid, coordDim=2, farrayPtr=latPtr, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          call ESMF_AttributeGet(mirror_bundle, convention="NetCDF", purpose="FV3", &
+                                 name="grid_id", value=grid_id, rc=rc)
+          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+          if (trim(output_grid(grid_id)) == 'rotated_latlon_moving') then
+            n = grid_id
+            ! for testing use prescribed values for center lat/lon
+            ! eventualy the values passed via bundle attributes should be used
+            cen_lon(n) = clon(nout)    ! FOR TESTING ONLY
+            cen_lat(n) = clat(nout)    ! FOR TESTING ONLY
+            cen_lon(n) = NINT(cen_lon(n)*100.0)/100.0
+            cen_lat(n) = NINT(cen_lat(n)*100.0)/100.0
+            do jj=lbound(lonPtr,2),ubound(lonPtr,2)
+            do ii=lbound(lonPtr,1),ubound(lonPtr,1)
+              rot_lon = lon1(n) + (lon2(n)-lon1(n))/(imo(n)-1) * (ii-1)
+              rot_lat = lat1(n) + (lat2(n)-lat1(n))/(jmo(n)-1) * (jj-1)
+              call rtll(rot_lon, rot_lat, geo_lon, geo_lat, dble(cen_lon(n)), dble(cen_lat(n)))
+              if (geo_lon < 0.0) geo_lon = geo_lon + 360.0
+              lonPtr(ii,jj) = geo_lon
+              latPtr(ii,jj) = geo_lat
+            enddo
+            enddo
+          else
+            write(0,*)'Moving nest supports only rotated_latlon_moving ouput_grid, for now'
+            call ESMF_Finalize(endflag=ESMF_END_ABORT)
+          endif
+
           call ESMF_FieldBundleRegridStore(mirror_bundle, file_bundle,                &
                                            regridMethod=regridmethod, routehandle=rh, &
                                            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
@@ -1889,6 +1959,16 @@ call ESMF_TraceRegionExit("ESMF_FieldBundleRegrid()", rc=rc)
           call ESMF_AttributeGet(wrt_int_state%wrtFB(nbdl), convention="NetCDF", purpose="FV3", &
                                  name="grid_id", value=grid_id, rc=rc)
           if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+          ! update cen_lon/cen_lat for rotated_latlon_moving
+          if (trim(output_grid(grid_id)) == 'rotated_latlon_moving') then
+            call ESMF_AttributeSet(wrt_int_state%wrtFB(nbdl), convention="NetCDF", purpose="FV3", &
+                                   name="cen_lon", value=cen_lon(grid_id), rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+            call ESMF_AttributeSet(wrt_int_state%wrtFB(nbdl), convention="NetCDF", purpose="FV3", &
+                                   name="cen_lat", value=cen_lat(grid_id), rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+          endif
 
           if(step == 1) then
             file_bundle = wrt_int_state%wrtFB(nbdl)
@@ -2011,6 +2091,7 @@ call ESMF_TraceRegionExit("ESMF_FieldBundleRegrid()", rc=rc)
 
           else if (trim(output_grid(grid_id)) == 'regional_latlon' .or. &
                    trim(output_grid(grid_id)) == 'rotated_latlon'  .or. &
+                   trim(output_grid(grid_id)) == 'rotated_latlon_moving'  .or. &
                    trim(output_grid(grid_id)) == 'lambert_conformal') then
 
             !mask fields according to sfc pressure
