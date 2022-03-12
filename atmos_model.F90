@@ -104,7 +104,7 @@ use module_block_data,  only: block_atmos_copy, block_data_copy,         &
 
 #ifdef MOVING_NEST
 use fv_moving_nest_main_mod, only: update_moving_nest, dump_moving_nest
-#endif MOVING_NEST
+#endif
 !-----------------------------------------------------------------------
 
 implicit none
@@ -138,8 +138,6 @@ public setup_exportdata
      integer                       :: iau_offset         ! iau running window length
      logical                       :: pe                 ! current pe.
      real(kind=8),             pointer, dimension(:)     :: ak, bk
-     real(kind=GFS_kind_phys)                            :: lon_cen            ! grid/tile center longitude in radians.
-     real(kind=GFS_kind_phys)                            :: lat_cen            ! grid/tile center latitude in radians.
      real(kind=GFS_kind_phys), pointer, dimension(:,:)   :: lon_bnd  => null() ! local longitude axis grid box corners in radians.
      real(kind=GFS_kind_phys), pointer, dimension(:,:)   :: lat_bnd  => null() ! local latitude axis grid box corners in radians.
      real(kind=GFS_kind_phys), pointer, dimension(:,:)   :: lon      => null() ! local longitude axis grid box centers in radians.
@@ -789,7 +787,7 @@ subroutine update_atmos_model_dynamics (Atmos)
     if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest ) then
       call update_moving_nest (Atm_block, GFS_control, GFS_data, Atmos%Time)
     endif
-#endif MOVING_NEST
+#endif
     call mpp_clock_begin(fv3Clock)
     call atmosphere_dynamics (Atmos%Time)
 #ifdef MOVING_NEST
@@ -798,7 +796,7 @@ subroutine update_atmos_model_dynamics (Atmos)
     if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest ) then
       call dump_moving_nest (Atm_block, GFS_control, GFS_data, Atmos%Time)
     endif
-#endif MOVING_NEST
+#endif
 
     call mpp_clock_end(fv3Clock)
 
@@ -959,7 +957,7 @@ subroutine update_atmos_model_state (Atmos, rc)
     !--- conditionally update the coordinate arrays for moving domains
     if (Atmos%is_moving_nest) then
       call atmosphere_grid_bdry (Atmos%lon_bnd, Atmos%lat_bnd, global=.false.)
-      call atmosphere_grid_ctr (Atmos%lon, Atmos%lat, Atmos%lon_cen, Atmos%lat_cen)
+      call atmosphere_grid_ctr (Atmos%lon, Atmos%lat)
     endif
 
  end subroutine update_atmos_model_state
