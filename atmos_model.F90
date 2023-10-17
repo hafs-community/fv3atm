@@ -136,6 +136,7 @@ public setup_exportdata
      logical                       :: nested             ! true if there is a nest
      logical                       :: moving_nest_parent ! true if this grid has a moving nest child
      logical                       :: is_moving_nest     ! true if this is a moving nest grid
+     logical                       :: any_moving_nest    ! true if any nest for ths run is a moving nest
      logical                       :: isAtCapTime        ! true if currTime is at the cap driverClock's currTime
      integer                       :: ngrids             !
      integer                       :: mygrid             !
@@ -570,8 +571,9 @@ subroutine atmos_model_init (Atmos, Time_init, Time, Time_step)
                            Atmos%ngrids, Atmos%mygrid, Atmos%pelist)
    Atmos%moving_nest_parent = .false.
    Atmos%is_moving_nest = .false.
+   Atmos%any_moving_nest = .false.
 #ifdef MOVING_NEST
-   call check_is_moving_nest(Atm, Atmos%mygrid, Atmos%ngrids, Atmos%is_moving_nest, Atmos%moving_nest_parent)
+   call check_is_moving_nest(Atm, Atmos%mygrid, Atmos%ngrids, Atmos%is_moving_nest, Atmos%moving_nest_parent, Atmos%any_moving_nest)
 #endif
    call atmosphere_diag_axes (Atmos%axes)
    call atmosphere_etalvls (Atmos%ak, Atmos%bk, flip=flip_vc)
@@ -830,7 +832,8 @@ subroutine update_atmos_model_dynamics (Atmos)
 #ifdef MOVING_NEST
     ! W. Ramstrom, AOML/HRD -- May 28, 2021
     ! Evaluates whether to move nest, then performs move if needed
-    if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest ) then
+    !if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest .or. .True.) then
+    if (Atmos%any_moving_nest) then
       call update_moving_nest (Atm_block, GFS_control, GFS_data, Atmos%Time)
     endif
 #endif
@@ -839,7 +842,8 @@ subroutine update_atmos_model_dynamics (Atmos)
 #ifdef MOVING_NEST
     ! W. Ramstrom, AOML/HRD -- June 9, 2021
     ! Debugging output of moving nest code.  Called from this level to access needed input variables.
-    if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest ) then
+    !if (Atmos%moving_nest_parent .or. Atmos%is_moving_nest .or. .True.) then
+    if (Atmos%any_moving_nest) then
       call dump_moving_nest (Atm_block, GFS_control, GFS_data, Atmos%Time)
     endif
 #endif

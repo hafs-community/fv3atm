@@ -26,7 +26,11 @@ module fv_tracker_mod
 
 #include <fms_platform.h>
 
+#ifdef OVERLOAD_R4
+   use constantsR4_mod,    only: pi=>pi_8, rad_to_deg, deg_to_rad, RVGAS, RDGAS
+#else
   use constants_mod,       only: pi=>pi_8, rad_to_deg, deg_to_rad, RVGAS, RDGAS
+#endif
   use fms_mod,             only: mpp_clock_id, CLOCK_SUBCOMPONENT, clock_flag_default, &
                                  mpp_clock_begin, mpp_clock_end
   use time_manager_mod,    only: time_type, get_time, set_time, operator(+), &
@@ -125,17 +129,20 @@ module fv_tracker_mod
   end type fv_tracker_type
 
   type(fv_tracker_type), _ALLOCATABLE, target :: Tracker(:)
-  integer :: n = 2 ! TODO allow to vary for multiple nests
+  !integer :: n = 2 ! TODO allow to vary for multiple nests
+  integer :: n = -99
   integer :: id_fv_tracker
 
 contains
 
-  subroutine fv_tracker_init(length)
+  subroutine fv_tracker_init(length, this_grid)
     ! Initialize tracker variables in the Atm structure.
     implicit none
-    integer, intent(in)     :: length
+    integer, intent(in)     :: length, this_grid
 
     integer :: i
+
+    n = this_grid
 
     call mpp_error(NOTE, 'fv_tracker_init')
     id_fv_tracker= mpp_clock_id ('FV tracker',  flags = clock_flag_default, grain=CLOCK_SUBCOMPONENT )
@@ -224,10 +231,10 @@ contains
 
   end subroutine deallocate_tracker
 
-  subroutine check_is_moving_nest(Atm, mygrid, ngrids, is_moving_nest, moving_nest_parent)
+  subroutine check_is_moving_nest(Atm, mygrid, ngrids, is_moving_nest, moving_nest_parent, any_moving_nest)
     type(fv_atmos_type), intent(inout) :: Atm(:)
     integer, intent(in) :: mygrid, ngrids
-    logical,   intent(out) :: is_moving_nest, moving_nest_parent
+    logical,   intent(out) :: is_moving_nest, moving_nest_parent, any_moving_nest
 
     integer :: nn
 
@@ -239,10 +246,15 @@ contains
     is_moving_nest = Moving_nest(mygrid)%mn_flag%is_moving_nest
     ! Set parent_of_moving_nest to true if it has a moving nest child
 
+    moving_nest_parent = .false.
+    any_moving_nest = .false.
+
     do nn=2,ngrids
-      if ( mygrid == Atm(nn)%parent_grid%grid_number .and. &
-          Moving_nest(nn)%mn_flag%is_moving_nest ) then
-        moving_nest_parent = .true.
+      if ( Moving_nest(nn)%mn_flag%is_moving_nest ) then
+        any_moving_nest = .true.
+        if ( mygrid == Atm(nn)%parent_grid%grid_number ) then
+          moving_nest_parent = .true.
+        endif
       endif
     enddo
 
@@ -277,7 +289,7 @@ contains
         if (mod(seconds,Moving_nest(mygrid)%mn_flag%ntrack*sec) .eq. 0) then
           call mpp_clock_begin(id_fv_tracker)
           call timing_on('FV_TRACKER')
-          call fv_diag_tracker(Atm(mygrid:mygrid), zvir, fv_time)
+          call fv_diag_tracker(Atm(mygrid), mygrid, zvir, fv_time)
           call fv_tracker_center(Atm(mygrid), mygrid, fv_time)
           call timing_off('FV_TRACKER')
           call mpp_clock_end(id_fv_tracker)
@@ -316,16 +328,16 @@ contains
 
   end subroutine fv_tracker_center
 
-  subroutine fv_diag_tracker(Atm, zvir, Time)
+  subroutine fv_diag_tracker(Atm, nt, zvir, Time)
 
-    type(fv_atmos_type), intent(inout) :: Atm(:)
+    type(fv_atmos_type), intent(inout) :: Atm
+    integer, intent(in)                :: nt
     type(time_type),     intent(in) :: Time
     real,                intent(in):: zvir
 
-    integer :: isc, iec, jsc, jec, n, ntileMe
+    integer :: isc, iec, jsc, jec
     integer :: isd, ied, jsd, jed, npz, itrac
     integer :: ngc
-    integer :: nt = 2  ! TODO adjust to nest number for multiple nests
 
     real, allocatable :: a2(:,:),a3(:,:,:),a4(:,:,:), wk(:,:,:), wz(:,:,:)
     real :: height(2)
@@ -345,17 +357,16 @@ contains
     pout(2) = 850 * 1.e2
     plevs(2) = log( pout(2) )
 
-    ntileMe = size(Atm(:))
-    n = 1
-    isc = Atm(n)%bd%isc; iec = Atm(n)%bd%iec
-    jsc = Atm(n)%bd%jsc; jec = Atm(n)%bd%jec
-    ngc = Atm(n)%ng
-    npz = Atm(n)%npz
-    ptop = Atm(n)%ak(1)
-    nq = size (Atm(n)%q,4)
 
-    isd = Atm(n)%bd%isd; ied = Atm(n)%bd%ied
-    jsd = Atm(n)%bd%jsd; jed = Atm(n)%bd%jed
+    isc = Atm%bd%isc; iec = Atm%bd%iec
+    jsc = Atm%bd%jsc; jec = Atm%bd%jec
+    ngc = Atm%ng
+    npz = Atm%npz
+    ptop = Atm%ak(1)
+    nq = size (Atm%q,4)
+
+    isd = Atm%bd%isd; ied = Atm%bd%ied
+    jsd = Atm%bd%jsd; jed = Atm%bd%jed
 
     fv_time = Time
 
@@ -365,51 +376,51 @@ contains
     if (.not. allocated(wz)) allocate ( wz(isc:iec,jsc:jec,npz+1) )
 
     !    do n = 1, ntileMe
-    n = 1
-    call get_height_field(isc, iec, jsc, jec, ngc, npz, Atm(n)%flagstruct%hydrostatic, Atm(n)%delz,  &
-        wz, Atm(n)%pt, Atm(n)%q, Atm(n)%peln, zvir)
+
+    call get_height_field(isc, iec, jsc, jec, ngc, npz, Atm%flagstruct%hydrostatic, Atm%delz,  &
+        wz, Atm%pt, Atm%q, Atm%peln, zvir)
 
     call get_pressure_given_height(isc, iec, jsc, jec, ngc, npz, wz, 1, height(2),   &
-        Atm(n)%pt(:,:,npz), Atm(n)%peln, a2, 1.)
+        Atm%pt(:,:,npz), Atm%peln, a2, 1.)
     ! sea level pressure in Pa
     Tracker(nt)%slp=a2(:,:)
     call prt_maxmin('slp', Tracker(nt)%slp, isc, iec, jsc, jec, 0, 1, 1.)
 
     idg(:) = 1
-    call get_height_given_pressure(isc, iec, jsc, jec, npz, wz, nplev_tracker, idg, plevs, Atm(n)%peln, a3)
+    call get_height_given_pressure(isc, iec, jsc, jec, npz, wz, nplev_tracker, idg, plevs, Atm%peln, a3)
     Tracker(nt)%z700=a3(isc:iec,jsc:jec,1)
     Tracker(nt)%z850=a3(isc:iec,jsc:jec,2)
     call prt_maxmin('z700', Tracker(nt)%z700, isc, iec, jsc, jec, 0, 1, 1.)
     call prt_maxmin('z850', Tracker(nt)%z850, isc, iec, jsc, jec, 0, 1, 1.)
 
-    call cs3_interpolator(isc,iec,jsc,jec,npz, Atm(n)%ua(isc:iec,jsc:jec,:), nplev_tracker,    &
-        pout(1:nplev_tracker), wz, Atm(n)%pe(isc:iec,1:npz+1,jsc:jec), idg, a3, -1)
+    call cs3_interpolator(isc,iec,jsc,jec,npz, Atm%ua(isc:iec,jsc:jec,:), nplev_tracker,    &
+        pout(1:nplev_tracker), wz, Atm%pe(isc:iec,1:npz+1,jsc:jec), idg, a3, -1)
     Tracker(nt)%u700=a3(isc:iec,jsc:jec,1)
     Tracker(nt)%u850=a3(isc:iec,jsc:jec,2)
     call prt_maxmin('u700', Tracker(nt)%u700, isc, iec, jsc, jec, 0, 1, 1.)
     call prt_maxmin('u850', Tracker(nt)%u850, isc, iec, jsc, jec, 0, 1, 1.)
 
-    call cs3_interpolator(isc,iec,jsc,jec,npz, Atm(n)%va(isc:iec,jsc:jec,:), nplev_tracker,    &
-        pout(1:nplev_tracker), wz, Atm(n)%pe(isc:iec,1:npz+1,jsc:jec), idg, a3, -1)
+    call cs3_interpolator(isc,iec,jsc,jec,npz, Atm%va(isc:iec,jsc:jec,:), nplev_tracker,    &
+        pout(1:nplev_tracker), wz, Atm%pe(isc:iec,1:npz+1,jsc:jec), idg, a3, -1)
     Tracker(nt)%v700=a3(isc:iec,jsc:jec,1)
     Tracker(nt)%v850=a3(isc:iec,jsc:jec,2)
     call prt_maxmin('v700', Tracker(nt)%v700, isc, iec, jsc, jec, 0, 1, 1.)
     call prt_maxmin('v850', Tracker(nt)%v850, isc, iec, jsc, jec, 0, 1, 1.)
 
-    call interpolate_z(isc, iec, jsc, jec, npz, 10., wz, Atm(n)%ua(isc:iec,jsc:jec,:), a2)
+    call interpolate_z(isc, iec, jsc, jec, npz, 10., wz, Atm%ua(isc:iec,jsc:jec,:), a2)
     Tracker(nt)%u10m=a2(isc:iec,jsc:jec)
-    call interpolate_z(isc, iec, jsc, jec, npz, 10., wz, Atm(n)%va(isc:iec,jsc:jec,:), a2)
+    call interpolate_z(isc, iec, jsc, jec, npz, 10., wz, Atm%va(isc:iec,jsc:jec,:), a2)
     Tracker(nt)%v10m=a2(isc:iec,jsc:jec)
     call prt_maxmin('u10m', Tracker(nt)%u10m, isc, iec, jsc, jec, 0, 1, 1.)
     call prt_maxmin('v10m', Tracker(nt)%v10m, isc, iec, jsc, jec, 0, 1, 1.)
 
-    call get_vorticity(isc, iec, jsc, jec, isd, ied, jsd, jed, npz, Atm(n)%u, Atm(n)%v, wk, &
-        Atm(n)%gridstruct%dx, Atm(n)%gridstruct%dy, Atm(n)%gridstruct%rarea)
+    call get_vorticity(isc, iec, jsc, jec, isd, ied, jsd, jed, npz, Atm%u, Atm%v, wk, &
+        Atm%gridstruct%dx, Atm%gridstruct%dy, Atm%gridstruct%rarea)
     call interpolate_vertical(isc, iec, jsc, jec, npz,   &
-        700.e2, Atm(n)%peln, wk, a2)
+        700.e2, Atm%peln, wk, a2)
     Tracker(nt)%vort700=a2(:,:)
     call interpolate_vertical(isc, iec, jsc, jec, npz,   &
-        850.e2, Atm(n)%peln, wk, a2)
+        850.e2, Atm%peln, wk, a2)
     Tracker(nt)%vort850=a2(:,:)
     call interpolate_z(isc, iec, jsc, jec, npz, 10., wz, wk, a2)
     Tracker(nt)%vort10m=a2(:,:)
@@ -1567,6 +1578,7 @@ contains
         ims,ime,jms,jme,kms,kme, &
         its,ite,jts,jte,kts,kte)
     if(ierr/=0) then
+      print '("[INFO] get_distsq XX npe=",I0)', mpp_pe()
       call mpp_error(FATAL, 'Domain center location is not inside domain.')
     end if
 
@@ -1665,6 +1677,7 @@ contains
 17  format('Min distance from lon=',F9.3,', lat=',F9.3,' to center is ',F19.3)
     write(message,17) clonr, clatr, Tracker(n)%tracker_edge_dist
     call mpp_error(NOTE, message)
+
   end subroutine get_tracker_distsq
 
   subroutine calcdist(rlonb,rlatb,rlonc,rlatc,xdist,degrees)

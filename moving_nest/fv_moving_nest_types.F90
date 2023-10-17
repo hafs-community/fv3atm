@@ -216,6 +216,13 @@ module fv_moving_nest_types_mod
 
     type(grid_geometry)               :: parent_geo
     type(grid_geometry)               :: fp_super_tile_geo
+
+    logical                           :: first_nest_move  ! Is this the first time this nest moves?
+
+    ! These are updated every timestep when nest motion is evaluated
+    logical                           :: do_move
+    integer                           :: delta_i_c, delta_j_c
+
   end type fv_moving_nest_type
 
   ! Moving Nest Namelist Variables
@@ -266,6 +273,7 @@ contains
 
     do n=1,ngrids
       if (Atm(n)%neststruct%nested) then
+        Moving_nest(n)%first_nest_move                = .True.    ! TODO only set this true if is_moving_nest
         Moving_nest(n)%mn_flag%is_moving_nest         = is_moving_nest(n)
         Moving_nest(n)%mn_flag%surface_dir            = trim(surface_dir)
         Moving_nest(n)%mn_flag%terrain_smoother       = terrain_smoother(n)
@@ -277,6 +285,7 @@ contains
         Moving_nest(n)%mn_flag%corral_y               = corral_y(n)
         Moving_nest(n)%mn_flag%outatcf_lun            = outatcf_lun(n)
       else
+        Moving_nest(n)%first_nest_move                = .False.
         Moving_nest(n)%mn_flag%is_moving_nest         = .false.
         Moving_nest(n)%mn_flag%vortex_tracker         = 0
         Moving_nest(n)%mn_flag%ntrack                 = 1
@@ -288,9 +297,7 @@ contains
       endif
     enddo
 
-
     call read_input_nml(Atm(this_grid)%nml_filename) !re-reads into internal namelist
-
 
   end subroutine fv_moving_nest_init
 
@@ -336,8 +343,12 @@ contains
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
     type(fv_moving_nest_prog_type), intent(inout) :: mn_prog
 
-    allocate ( mn_prog%delz(isd:ied, jsd:jed, 1:npz) )
-    mn_prog%delz = +99999.9
+    ! This allocate call will happen more than once for parents of multiple nests.
+
+    if (.not. allocated(mn_prog%delz)) then
+      allocate ( mn_prog%delz(isd:ied, jsd:jed, 1:npz) )
+      mn_prog%delz = +99999.9
+    endif
 
   end subroutine allocate_fv_moving_nest_prog_type
 
@@ -355,6 +366,11 @@ contains
     type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
 
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
+
+    ! This allocate call will happen more than once for parents of multiple nests.
+    if (allocated(mn_phys%ts)) then
+      return
+    endif
     allocate ( mn_phys%ts(isd:ied, jsd:jed) )
 
     if (move_physics) then
