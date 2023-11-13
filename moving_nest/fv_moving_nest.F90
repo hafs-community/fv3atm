@@ -72,11 +72,7 @@ module fv_moving_nest_mod
 
   use boundary_mod,           only: update_coarse_grid, update_coarse_grid_mpp
   use bounding_box_mod,       only: bbox, bbox_get_C2F_index, fill_bbox
-#ifdef OVERLOAD_R4
-  use constantsR4_mod,        only: cp_air, omega, rdgas, grav, rvgas, kappa, pstd_mks, hlv
-#else
   use constants_mod,          only: cp_air, omega, rdgas, grav, rvgas, kappa, pstd_mks, hlv
-#endif
   use field_manager_mod,      only: MODEL_ATMOS
   use fv_arrays_mod,          only: fv_atmos_type, fv_nest_type, fv_grid_type, R_GRID
   use fv_arrays_mod,          only: allocate_fv_nest_bc_type, deallocate_fv_nest_bc_type
@@ -130,11 +126,13 @@ module fv_moving_nest_mod
   !! Step 6
   interface mn_var_shift_data
     module procedure mn_var_shift_data_r4_2d
-    module procedure mn_var_shift_data_r4_3d
+    module procedure mn_var_shift_data_r4_3d_highz
+    module procedure mn_var_shift_data_r4_3d_lowhighz
     module procedure mn_var_shift_data_r4_4d
 
     module procedure mn_var_shift_data_r8_2d
-    module procedure mn_var_shift_data_r8_3d
+    module procedure mn_var_shift_data_r8_3d_highz
+    module procedure mn_var_shift_data_r8_3d_lowhighz
     module procedure mn_var_shift_data_r8_4d
   end interface mn_var_shift_data
 
@@ -803,6 +801,7 @@ contains
     call load_nest_latlons_from_nc(trim(grid_filename), npx, npy, refine, pelist, &
         fp_super_tile_geo, fp_super_istart_fine, fp_super_iend_fine, fp_super_jstart_fine, fp_super_jend_fine)
 
+
   end subroutine mn_latlon_read_hires_parent
 
   !>@brief The subroutine 'mn_orog_read_hires_parent' loads parent orography data from netCDF
@@ -1252,9 +1251,9 @@ contains
 
   end subroutine mn_var_shift_data_r8_2d
 
-  !>@brief The subroutine 'mn_prog_shift_data_r4_3d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_prog_shift_data_r4_3d_highz' shifts the data for a variable on each nest PE
   !>@details For one single precision 3D variable
-  subroutine mn_var_shift_data_r4_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
+  subroutine mn_var_shift_data_r4_3d_highz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
 
     real*4, allocatable, intent(inout)          :: data_var(:,:,:)                          !< Data variable
     integer, intent(in)                         :: interp_type                              !< Interpolation stagger type
@@ -1264,6 +1263,22 @@ contains
     logical, intent(in)                         :: is_fine_pe                               !< Is nest PE?
     type(nest_domain_type), intent(inout)       :: nest_domain                              !< Nest domain structure
     integer, intent(in)                         :: position, nz                             !< Grid offset, number of vertical levels
+
+    call mn_var_shift_data_r4_3d_lowhighz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, 1, nz)
+
+  end subroutine mn_var_shift_data_r4_3d_highz
+  !>@brief The subroutine 'mn_prog_shift_data_r4_3d_lowhighz' shifts the data for a variable on each nest PE
+  !>@details For one single precision 3D variable
+  subroutine mn_var_shift_data_r4_3d_lowhighz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, z_low, z_high)
+
+    real*4, allocatable, intent(inout)          :: data_var(:,:,:)                          !< Data variable
+    integer, intent(in)                         :: interp_type                              !< Interpolation stagger type
+    real, allocatable, intent(in)               :: wt(:,:,:)                                !< Interpolation weight array
+    integer, allocatable, intent(in)            :: ind(:,:,:)                               !< Fine to coarse index array
+    integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine !< delta i,j for nest move.  Nest refinement.
+    logical, intent(in)                         :: is_fine_pe                               !< Is nest PE?
+    type(nest_domain_type), intent(inout)       :: nest_domain                              !< Nest domain structure
+    integer, intent(in)                         :: position, z_low, z_high                             !< Grid offset, number of vertical levels
 
     real*4, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)      :: north_fine, north_coarse ! step 4
@@ -1278,10 +1293,10 @@ contains
     !!
     !!===========================================================
 
-    call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position, nz)
-    call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, nz)
-    call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, nz)
-    call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nz)
+    call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position, z_low, z_high)
+    call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, z_low, z_high)
+    call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, z_low, z_high)
+    call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, z_low, z_high)
 
 
     !====================================================
@@ -1310,10 +1325,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, nz, NORTH, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, nz, SOUTH, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, nz, EAST, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, wbuffer, west_fine, west_coarse, nz, WEST, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, z_low, z_high, NORTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, z_low, z_high, SOUTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, z_low, z_high, EAST, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, wbuffer, west_fine, west_coarse, z_low, z_high, WEST, x_refine, y_refine, wt, ind)
     endif
 
     deallocate(nbuffer)
@@ -1321,12 +1336,12 @@ contains
     deallocate(ebuffer)
     deallocate(wbuffer)
 
-  end subroutine mn_var_shift_data_r4_3d
+  end subroutine mn_var_shift_data_r4_3d_lowhighz
 
 
-  !>@brief The subroutine 'mn_prog_shift_data_r8_3d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_prog_shift_data_r8_3d_highz' shifts the data for a variable on each nest PE
   !>@details For one double precision 3D variable
-  subroutine mn_var_shift_data_r8_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
+  subroutine mn_var_shift_data_r8_3d_highz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
 
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)                              !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
@@ -1336,6 +1351,23 @@ contains
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position, nz                                 !< Grid offset, number vertical levels
+
+    call mn_var_shift_data_r8_3d_lowhighz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, 1, nz)
+
+  end subroutine mn_var_shift_data_r8_3d_highz
+
+  !>@brief The subroutine 'mn_prog_shift_data_r8_3d' shifts the data for a variable on each nest PE
+  !>@details For one double precision 3D variable
+  subroutine mn_var_shift_data_r8_3d_lowhighz(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, z_low, z_high)
+
+    real*8, allocatable, intent(inout)          :: data_var(:,:,:)                              !< Data variable
+    integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
+    real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
+    integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
+    integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
+    logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
+    integer, intent(in)                         :: position, z_low, z_high                                 !< Grid offset, number vertical levels
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)      :: north_fine, north_coarse ! step 4
@@ -1350,10 +1382,10 @@ contains
     !!
     !!===========================================================
 
-    call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position, nz)
-    call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, nz)
-    call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, nz)
-    call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nz)
+    call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position, z_low, z_high)
+    call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, z_low, z_high)
+    call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, z_low, z_high)
+    call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, z_low, z_high)
 
     !====================================================
     ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
@@ -1380,10 +1412,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, nz, NORTH, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, nz, SOUTH, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, nz, EAST, x_refine, y_refine, wt, ind)
-      call fill_nest_from_buffer(interp_type, data_var, wbuffer, west_fine, west_coarse, nz, WEST, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, z_low, z_high, NORTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, z_low, z_high, SOUTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, z_low, z_high, EAST, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, wbuffer, west_fine, west_coarse, z_low, z_high, WEST, x_refine, y_refine, wt, ind)
     endif
 
     deallocate(nbuffer)
@@ -1391,7 +1423,7 @@ contains
     deallocate(ebuffer)
     deallocate(wbuffer)
 
-  end subroutine mn_var_shift_data_r8_3d
+  end subroutine mn_var_shift_data_r8_3d_lowhighz
 
 
   !>@brief The subroutine 'mn_prog_shift_data_r4_4d' shifts the data for a variable on each nest PE
@@ -2121,14 +2153,14 @@ contains
       call output_grid_to_nc("GH", isd_fine, ied_fine, jsd_fine, jed_fine, nz, data_var, prefix_fine, var_name, time_step, domain_fine, position)
 
     else
-      if (this_tile == 6) then
+      !if (this_tile == 6) then
         !call mpp_get_compute_domain(domain_coarse, isc_coarse, iec_coarse, jsc_coarse, jec_coarse, position=position)
         call mpp_get_data_domain(domain_coarse, isd_coarse, ied_coarse, jsd_coarse, jed_coarse, position=position)
         !call mpp_get_memory_domain(domain_coarse, ism_coarse, iem_coarse, jsm_coarse, jem_coarse, position=position)
 
         call output_grid_to_nc("GH", isd_coarse, ied_coarse, jsd_coarse, jed_coarse, nz, data_var, prefix_coarse, var_name, time_step, domain_coarse, position)
 
-      endif
+      !endif
     endif
 
   end subroutine mn_var_dump_3d_to_netcdf
@@ -2172,14 +2204,14 @@ contains
       call output_grid_to_nc("GH", isd_fine, ied_fine, jsd_fine, jed_fine, data_var, prefix_fine, var_name, time_step, domain_fine, position)
     else
 
-      if (this_tile == 6) then
+      !if (this_tile == 6) then
         !call mpp_get_compute_domain(domain_coarse, isc_coarse, iec_coarse, jsc_coarse, jec_coarse, position=position)
         call mpp_get_data_domain(domain_coarse, isd_coarse, ied_coarse, jsd_coarse, jed_coarse, position=position)
         !call mpp_get_memory_domain(domain_coarse, ism_coarse, iem_coarse, jsm_coarse, jem_coarse, position=position)
 
         call output_grid_to_nc("GH", isd_coarse, ied_coarse, jsd_coarse, jed_coarse, data_var, prefix_coarse, var_name, time_step, domain_coarse, position)
 
-      endif
+      !endif
     endif
 
   end subroutine mn_var_dump_2d_to_netcdf
@@ -2596,7 +2628,7 @@ contains
     real(kind=R_GRID), intent(in)                :: n_grid1, n_grid2
     integer, intent(in)                          :: ic, jc, istag, jstag
     logical, intent(out)                         :: is_inside
-    logical, intent(in)                         :: verbose
+    logical, intent(in)                          :: verbose
 
     
     real(kind=R_GRID) :: max1, max2, min1, min2, eps
@@ -2615,12 +2647,12 @@ contains
     if (n_grid1 .le. max1+eps .and. n_grid1 .ge. min1-eps) then
       if (n_grid2 .le. max2+eps .and. n_grid2 .ge. min2-eps) then
         is_inside = .True.
-        !if (verbose) print '("[INFO] WDR is_inside TRUE npe=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," min1=",F12.8," max1=",F12.8," n_grid2=",F12.8," min2=",F12.8," max2=", F12.8," p_grid(",I0,",",I0,",2) istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, n_grid1, min1, max1, n_grid2, min2, max2, ubound(p_grid,1), ubound(p_grid,2), istag, jstag
+!        if (verbose) print '("[INFO] WDR is_inside TRUE npe=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," min1=",F12.8," max1=",F12.8," n_grid2=",F12.8," min2=",F12.8," max2=", F12.8," p_grid(",I0,",",I0,",2) istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, n_grid1, min1, max1, n_grid2, min2, max2, ubound(p_grid,1), ubound(p_grid,2), istag, jstag
       endif
     endif
 
     if (verbose .and. .not. is_inside) then
-      print '("[INFO] WDR is_inside FALSE npe=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," min1=",F12.8," max1=",F12.8," n_grid2=",F12.8," min2=",F12.8," max2=", F10.4," p_grid(",I0,",",I0,",2) istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, n_grid1, min1, max1, n_grid2, min2, max2, ubound(p_grid,1), ubound(p_grid,2), istag, jstag
+      print '("[WARN] WDR is_inside FALSE npe=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," min1=",F12.8," max1=",F12.8," n_grid2=",F12.8," min2=",F12.8," max2=", F10.4," p_grid(",I0,",",I0,",2) istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, n_grid1, min1, max1, n_grid2, min2, max2, ubound(p_grid,1), ubound(p_grid,2), istag, jstag
     endif
 
 
@@ -2681,32 +2713,32 @@ contains
 
           call calc_inside(p_grid, ic, jc, n_grid(i,j,1), n_grid(i,j,2), istag, jstag, is_inside, .True.)
 
-!          if (.not. is_inside) then
-!            adjusted = .False.
-!
-!            do di = -2,2
-!              do dj = -2,1
-!                if (.not. adjusted) then
-!                  call calc_inside(p_grid, ic+di, jc+dj, n_grid(i,j,1), n_grid(i,j,2), istag, jstag, is_inside, .False.)
-!                  if (is_inside) then
-!                    ic = ic + di
-!                    jc = jc + dj
-!                                        
-!                    print '("[INFO] WDR is_inside UPDATED npe=",I0," ic=",I0," jc=",I0," istart_coarse=",I0," jstart_coarse=",I0," i=",I0," j=",I0," di=",I0," dj=",I0," n_grid1=",F12.8," n_grid2=",F12.8," istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, istart_coarse, jstart_coarse, i, j,  di, dj, n_grid(i,j,1), n_grid(i,j,2), istag, jstag
-                    
-!                    dist1 = dist2side_latlon(p_grid(ic,jc,:),     p_grid(ic,jc+1,:),   n_grid(i,j,:))
-!                    dist2 = dist2side_latlon(p_grid(ic,jc+1,:),   p_grid(ic+1,jc+1,:), n_grid(i,j,:))
-!                    dist3 = dist2side_latlon(p_grid(ic+1,jc+1,:), p_grid(ic+1,jc,:),   n_grid(i,j,:))
-!                    dist4 = dist2side_latlon(p_grid(ic,jc,:),     p_grid(ic+1,jc,:),   n_grid(i,j,:))
-!                    
-!                    adjusted = .True.
-!                  endif
-!                endif
-!              enddo
-!            enddo
-!            if (.not. adjusted) print '("[ERROR] WDR is_inside UPDATE FAILED npe=",I0," i=",I0," j=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," n_grid2=",F12.8," istag=",I0," jstag=",I0)', mpp_pe(), i, j, ic, jc, n_grid(i,j,1), n_grid(i,j,2), istag, jstag
-!
-!          endif
+          if (.not. is_inside) then
+            adjusted = .False.
+
+            do di = -2,2
+              do dj = -2,1
+                if (.not. adjusted) then
+                  call calc_inside(p_grid, ic+di, jc+dj, n_grid(i,j,1), n_grid(i,j,2), istag, jstag, is_inside, .False.)
+                  if (is_inside) then
+                    ic = ic + di
+                    jc = jc + dj
+
+                    print '("[INFO] WDR is_inside UPDATED npe=",I0," ic=",I0," jc=",I0," istart_coarse=",I0," jstart_coarse=",I0," i=",I0," j=",I0," di=",I0," dj=",I0," n_grid1=",F12.8," n_grid2=",F12.8," istag=",I0," jstag=",I0)', mpp_pe(), ic, jc, istart_coarse, jstart_coarse, i, j,  di, dj, n_grid(i,j,1), n_grid(i,j,2), istag, jstag
+
+                    dist1 = dist2side_latlon(p_grid(ic,jc,:),     p_grid(ic,jc+1,:),   n_grid(i,j,:))
+                    dist2 = dist2side_latlon(p_grid(ic,jc+1,:),   p_grid(ic+1,jc+1,:), n_grid(i,j,:))
+                    dist3 = dist2side_latlon(p_grid(ic+1,jc+1,:), p_grid(ic+1,jc,:),   n_grid(i,j,:))
+                    dist4 = dist2side_latlon(p_grid(ic,jc,:),     p_grid(ic+1,jc,:),   n_grid(i,j,:))
+
+                    adjusted = .True.
+                  endif
+                endif
+              enddo
+            enddo
+            if (.not. adjusted) print '("[ERROR] WDR is_inside UPDATE FAILED npe=",I0," i=",I0," j=",I0," ic=",I0," jc=",I0," n_grid1=",F12.8," n_grid2=",F12.8," istag=",I0," jstag=",I0)', mpp_pe(), i, j, ic, jc, n_grid(i,j,1), n_grid(i,j,2), istag, jstag
+
+          endif
           
           old_weight = wt(i,j,:)
 
