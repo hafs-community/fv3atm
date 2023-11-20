@@ -83,6 +83,8 @@ module fv_moving_nest_types_mod
     real, allocatable  :: orog_grid(:,:)               _NULL  ! orography -- raw or filtered depending on namelist option, in meters
     real, allocatable  :: orog_std_grid(:,:)           _NULL  ! terrain standard deviation for gravity wave drag, in meters (?)
     real, allocatable  :: ls_mask_grid(:,:)            _NULL  ! land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+    real, allocatable  :: parent_ls_mask_grid(:,:)     _NULL  ! Coarse parent land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+    real, allocatable  :: parent_land_frac_grid(:,:)   _NULL  ! Coarse parent land fraction grid; figure out where lakes are located
     real, allocatable  :: land_frac_grid(:,:)          _NULL  ! Continuous land fraction - 0.0 ocean, 0.5 half of each, 1.0 all land
 
     real, allocatable  :: parent_orog_grid(:,:)        _NULL  ! parent orography -- only used for terrain_smoother=1.
@@ -205,6 +207,44 @@ module fv_moving_nest_types_mod
     !  Land Sea Mask has values of 0 for oceans/lakes, 1 for land, 2 for sea ice
     real (kind=kind_phys), _ALLOCATABLE :: dt_cool (:,:)    _NULL   !< sub-layer cooling amount for NSSTM
     real (kind=kind_phys), _ALLOCATABLE :: qrain (:,:)      _NULL   !< sensible heat flux due to rainfall for NSSTM
+
+ ! NOAH MP LSM Variables
+    real (kind=kind_phys), _ALLOCATABLE :: snowxy (:,:)     _NULL   !< number of snow layers
+    real (kind=kind_phys), _ALLOCATABLE :: tvxy (:,:)       _NULL   !< canopy temperature
+    real (kind=kind_phys), _ALLOCATABLE :: tgxy (:,:)       _NULL   !< ground temperature
+    real (kind=kind_phys), _ALLOCATABLE :: canicexy (:,:)   _NULL   !< canopy intercepted ice mass
+    real (kind=kind_phys), _ALLOCATABLE :: canliqxy (:,:)   _NULL   !< canopy intercepted liquid water
+    real (kind=kind_phys), _ALLOCATABLE :: eahxy (:,:)      _NULL   !< air vapor pressure in canopy
+    real (kind=kind_phys), _ALLOCATABLE :: tahxy (:,:)      _NULL   !< air temperature in canopy
+    real (kind=kind_phys), _ALLOCATABLE :: cmxy (:,:)       _NULL   !< bulk momentum drag coefficient [m/s]
+    real (kind=kind_phys), _ALLOCATABLE :: chxy (:,:)       _NULL   !< bulk sensible heat exchange coefficient [m/s]
+    real (kind=kind_phys), _ALLOCATABLE :: fwetxy (:,:)     _NULL   !< wetted or snowed fraction of the canopy
+    real (kind=kind_phys), _ALLOCATABLE :: sneqvoxy (:,:)   _NULL   !< snow mass at last time step[mm h2o]
+    real (kind=kind_phys), _ALLOCATABLE :: alboldxy (:,:)   _NULL   !< surface albedo assuming deep snow on previous timestep
+    real (kind=kind_phys), _ALLOCATABLE :: qsnowxy (:,:)    _NULL   !< liquid water equiv. snowfall rate
+    real (kind=kind_phys), _ALLOCATABLE :: wslakexy (:,:)   _NULL   !< lake water storage [mm]
+    real (kind=kind_phys), _ALLOCATABLE :: zwtxy (:,:)      _NULL   !< water table depth
+    real (kind=kind_phys), _ALLOCATABLE :: waxy (:,:)       _NULL   !< water storage in aquifer
+    real (kind=kind_phys), _ALLOCATABLE :: wtxy (:,:)       _NULL   !< water storage in aquifer and saturated soil
+    real (kind=kind_phys), _ALLOCATABLE :: lfmassxy (:,:)   _NULL   !< leaf mass [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: rtmassxy (:,:)   _NULL   !< mass of fine roots [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: stmassxy (:,:)   _NULL   !< stem mass [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: woodxy (:,:)     _NULL   !< mass of wood (incl. woody roots) [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: stblcpxy (:,:)   _NULL   !< stable carbon in deep soil [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: fastcpxy (:,:)   _NULL   !< short-lived carbon, shallow soil [g/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: xsaixy (:,:)     _NULL   !< stem area index [m2/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: xlaixy (:,:)     _NULL   !< leaf area index [m2/m2]
+    real (kind=kind_phys), _ALLOCATABLE :: taussxy (:,:)    _NULL   !< snow age factor [-]
+    real (kind=kind_phys), _ALLOCATABLE :: smcwtdxy (:,:)   _NULL   !< soil moisture content in the layer to the water table when deep
+    real (kind=kind_phys), _ALLOCATABLE :: deeprechxy (:,:) _NULL   !< recharge to the water table when deep
+    real (kind=kind_phys), _ALLOCATABLE :: rechxy (:,:)     _NULL   !< recharge to the water table
+
+    real (kind=kind_phys), _ALLOCATABLE :: snicexy (:,:,:)  _NULL   !< liq water equiv thickness of ice in surface snow
+    real (kind=kind_phys), _ALLOCATABLE :: snliqxy (:,:,:)  _NULL   !< liq water equiv thickness of liquid water in surface snow
+    real (kind=kind_phys), _ALLOCATABLE :: snowd (:,:)      _NULL   !< surface snow thickness water equivalent over land
+    real (kind=kind_phys), _ALLOCATABLE :: tsnoxy (:,:,:)   _NULL   !< temperature in surface snow
+    real (kind=kind_phys), _ALLOCATABLE :: weasd (:,:)      _NULL   !< water equivalent accumulated snow depth over land
+    real (kind=kind_phys), _ALLOCATABLE :: zsnsoxy (:,:,:)  _NULL   !< depth from snow surface at bottom interface
 
   end type fv_moving_nest_physics_type
 
@@ -348,14 +388,16 @@ contains
 
   end subroutine deallocate_fv_moving_nest_prog_type
 
-  subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_nsst, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
+  subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_noahmp, move_nsst, lsnow_lbound, lsnow_ubound, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
-    logical, intent(in)                           :: move_physics, move_nsst
-    integer, intent(in)                           :: lsoil, nmtvr, levs, ntot2d, ntot3d    ! From IPD_Control
+    logical, intent(in)                           :: move_physics, move_noahmp, move_nsst
+    integer, intent(in)                           :: lsnow_lbound, lsnow_ubound, lsoil, nmtvr, levs, ntot2d, ntot3d    ! From IPD_Control
     type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
 
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
     allocate ( mn_phys%ts(isd:ied, jsd:jed) )
+
+    !print '("[INFO] WDR allocate_fv_moving_nest_physics_type npe=",I0," lsnow_lbound=",I0," lsnow_ubound=",I0," lsoil=",I0)', mpp_pe(), lsnow_lbound, lsnow_ubound, lsoil
 
     if (move_physics) then
       allocate ( mn_phys%slmsk(isd:ied, jsd:jed) )
@@ -440,6 +482,47 @@ contains
       allocate ( mn_phys%qrain(isd:ied, jsd:jed) )
     end if
 
+    if (move_noahmp) then
+      allocate ( mn_phys%snowxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%tvxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%tgxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%canicexy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%canliqxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%eahxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%tahxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%cmxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%chxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%fwetxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%sneqvoxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%alboldxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%qsnowxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%wslakexy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zwtxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%waxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%wtxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%lfmassxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%rtmassxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%stmassxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%woodxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%stblcpxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%fastcpxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%xsaixy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%xlaixy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%taussxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%smcwtdxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%deeprechxy(isd:ied, jsd:jed) )
+      allocate ( mn_phys%rechxy(isd:ied, jsd:jed) )
+
+      allocate ( mn_phys%snicexy(isd:ied, jsd:jed, lsnow_lbound:lsnow_ubound) )
+      allocate ( mn_phys%snliqxy(isd:ied, jsd:jed, lsnow_lbound:lsnow_ubound) )
+      allocate ( mn_phys%snowd(isd:ied, jsd:jed) )
+      allocate ( mn_phys%tsnoxy(isd:ied, jsd:jed, lsnow_lbound:lsnow_ubound) )
+      allocate ( mn_phys%weasd(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zsnsoxy(isd:ied, jsd:jed, lsnow_lbound:lsoil) )
+
+      !allocate ( mn_phys%ustar1(isd:ied, jsd:jed) )
+    endif
+
     mn_phys%ts = +99999.9
     if (move_physics) then
       mn_phys%slmsk = +99999.9
@@ -523,6 +606,48 @@ contains
       mn_phys%dt_cool = +99999.9
       mn_phys%qrain = +99999.9
     end if
+
+
+    if (move_noahmp) then
+      mn_phys%snowxy = +99999.9
+      mn_phys%tvxy = +99999.9
+      mn_phys%tgxy = +99999.9
+      mn_phys%canicexy = +99999.9
+      mn_phys%canliqxy = +99999.9
+      mn_phys%eahxy = +99999.9
+      mn_phys%tahxy = +99999.9
+      mn_phys%cmxy = +99999.9
+      mn_phys%chxy = +99999.9
+      mn_phys%fwetxy = +99999.9
+      mn_phys%sneqvoxy = +99999.9
+      mn_phys%alboldxy = +99999.9
+      mn_phys%qsnowxy = +99999.9
+      mn_phys%wslakexy = +99999.9
+      mn_phys%zwtxy = +99999.9
+      mn_phys%waxy = +99999.9
+      mn_phys%wtxy = +99999.9
+      mn_phys%lfmassxy = +99999.9
+      mn_phys%rtmassxy = +99999.9
+      mn_phys%stmassxy = +99999.9
+      mn_phys%woodxy = +99999.9
+      mn_phys%stblcpxy = +99999.9
+      mn_phys%fastcpxy = +99999.9
+      mn_phys%xsaixy = +99999.9
+      mn_phys%xlaixy = +99999.9
+      mn_phys%taussxy = +99999.9
+      mn_phys%smcwtdxy = +99999.9
+      mn_phys%deeprechxy = +99999.9
+      mn_phys%rechxy = +99999.9
+
+      mn_phys%snicexy = +99999.9
+      mn_phys%snliqxy = +99999.9
+      mn_phys%snowd = +99999.9
+      mn_phys%tsnoxy = +99999.9
+      mn_phys%weasd = +99999.9
+      mn_phys%zsnsoxy = +99999.9
+
+      !mn_phys%ustar1 = +99999.9
+    endif
 
   end subroutine allocate_fv_moving_nest_physics_type
 
@@ -620,6 +745,47 @@ contains
       deallocate( mn_phys%dt_cool )
       deallocate( mn_phys%qrain )
     end if
+
+   ! NOAH MP LSM
+    if (allocated(mn_phys%snowxy)) then
+      deallocate ( mn_phys%snowxy )
+      deallocate ( mn_phys%tvxy )
+      deallocate ( mn_phys%tgxy )
+      deallocate ( mn_phys%canicexy )
+      deallocate ( mn_phys%canliqxy )
+      deallocate ( mn_phys%eahxy )
+      deallocate ( mn_phys%tahxy )
+      deallocate ( mn_phys%cmxy )
+      deallocate ( mn_phys%chxy )
+      deallocate ( mn_phys%fwetxy )
+      deallocate ( mn_phys%sneqvoxy )
+      deallocate ( mn_phys%alboldxy )
+      deallocate ( mn_phys%qsnowxy )
+      deallocate ( mn_phys%wslakexy )
+      deallocate ( mn_phys%zwtxy )
+      deallocate ( mn_phys%waxy )
+      deallocate ( mn_phys%wtxy )
+      deallocate ( mn_phys%lfmassxy )
+      deallocate ( mn_phys%rtmassxy )
+      deallocate ( mn_phys%stmassxy )
+      deallocate ( mn_phys%woodxy )
+      deallocate ( mn_phys%stblcpxy )
+      deallocate ( mn_phys%fastcpxy )
+      deallocate ( mn_phys%xsaixy )
+      deallocate ( mn_phys%xlaixy )
+      deallocate ( mn_phys%taussxy )
+      deallocate ( mn_phys%smcwtdxy )
+      deallocate ( mn_phys%deeprechxy )
+      deallocate ( mn_phys%rechxy )
+
+      deallocate ( mn_phys%snicexy )
+      deallocate ( mn_phys%snliqxy )
+      deallocate ( mn_phys%snowd )
+      deallocate ( mn_phys%tsnoxy )
+      deallocate ( mn_phys%weasd )
+      deallocate ( mn_phys%zsnsoxy )
+
+    endif
 
   end subroutine deallocate_fv_moving_nest_physics_type
 
