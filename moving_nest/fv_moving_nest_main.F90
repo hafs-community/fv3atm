@@ -33,7 +33,11 @@ module fv_moving_nest_main_mod
   ! FMS modules:
   !-----------------
   use block_control_mod,      only: block_control_type
+#ifdef OVERLOAD_R4
+  use constantsR4_mod,        only: cp_air, rdgas, grav, rvgas, kappa, pstd_mks
+#else
   use constants_mod,          only: cp_air, rdgas, grav, rvgas, kappa, pstd_mks
+#endif
   use time_manager_mod,       only: time_type, get_time, get_date, set_time, operator(+), &
       operator(-), operator(/), time_type_to_real
   use fms_mod,                only: file_exist, open_namelist_file,    &
@@ -152,7 +156,7 @@ module fv_moving_nest_main_mod
 
   ! Enable these for more debugging outputs
   logical :: debug_log = .false.    ! Produces logging to out.* file
-  logical :: tsvar_out = .true.    ! Produces netCDF outputs; be careful to not exceed file number limits set in namelist
+  logical :: tsvar_out = .false.    ! Produces netCDF outputs; be careful to not exceed file number limits set in namelist
 
   !  --- Clock ids for moving_nest performance metering
   integer :: id_movnest1, id_movnest1_9, id_movnest2, id_movnest3, id_movnest4, id_movnest5
@@ -160,6 +164,13 @@ module fv_moving_nest_main_mod
   integer :: id_movnest6, id_movnest7_0, id_movnest7_1, id_movnest7_2, id_movnest7_3, id_movnest8, id_movnest9
   integer :: id_movnestTot
   integer, save :: output_step = 0
+
+  type(mn_surface_grids), save           :: mn_static
+
+  interface overwrite_with_nest_init_values
+    module procedure overwrite_with_nest_init_values_r4
+    module procedure overwrite_with_nest_init_values_r8
+  end interface overwrite_with_nest_init_values
 
 contains
 
@@ -243,6 +254,273 @@ contains
 
 
 
+
+  subroutine log_landsea_mask(Atm_block, IPD_control, IPD_data, time_step, parent_grid_num, child_grid_num)
+    type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
+    type(IPD_control_type), intent(in)   :: IPD_control   !< Physics metadata
+    type(IPD_data_type), intent(in)      :: IPD_data(:)   !< Physics variable data
+    type(time_type), intent(in)          :: time_step     !< Current timestep
+    integer, intent(in)                  :: parent_grid_num, child_grid_num
+    
+
+    character(len=160)  :: line
+    character(len=1)    :: mask_char
+    character(len=1)    :: num_char
+    integer :: i,j
+    integer :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, refine
+    integer :: ioffset, joffset
+    real    :: local_slmsk(Atm(2)%bd%isd:Atm(2)%bd%ied, Atm(2)%bd%jsd:Atm(2)%bd%jed)
+    integer :: nz, this_pe, n
+    integer :: num_land, num_water
+
+    this_pe = mpp_pe()
+    n = mygrid
+
+    refine = Atm(child_grid_num)%neststruct%refinement
+    ioffset = Atm(child_grid_num)%neststruct%ioffset
+    joffset = Atm(child_grid_num)%neststruct%joffset
+
+    do i=lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1)
+      line = ""
+      do j=lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
+        !print '("[INFO] WDR oro size npe=",I0," is_allocated=",L1)', this_pe, allocated(Atm(n)%oro)
+        !print '("[INFO] WDR oro size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1), lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
+        if (Atm(n)%oro(i,j) .eq. 1) then
+          ! land
+          line = trim(line) // "+"
+        elseif (Atm(n)%oro(i,j) .eq. 2) then
+          ! Water
+          line = trim(line) // "."
+        else
+          ! Unknown
+          line = trim(line) // "X"
+        endif
+      enddo
+      !print '("[INFO] WDR oro npe=",I0," time=",I0," i=",I0," ",A80)',this_pe,a_step,i,trim(line)
+      
+    enddo
+    
+    
+    local_slmsk = 8
+    !print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
+    
+    do nb = 1,Atm_block%nblks
+      blen = Atm_block%blksz(nb)
+      do ix = 1, blen
+        i_pe = Atm_block%index(nb)%ii(ix)
+        j_pe = Atm_block%index(nb)%jj(ix)
+        
+        !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+        
+        local_slmsk(i_pe, j_pe) = IPD_data(nb)%Sfcprop%slmsk(ix)
+        
+        if (allocated(Moving_nest)) then
+          if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
+            if (int(local_slmsk(i_pe,j_pe)) .ne. 8) then
+              if (int(local_slmsk(i_pe,j_pe)) .ne. int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe))) then
+                print '("[INFO] WDR mismatch local_slmsk_lake npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," slmsk=",I0," phys%slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," ipd%landfrac=",F10.5," land_frac_grid=",F12.5," ipd%lakefrac=",F10.5," ipd%oceanfrac=",F10.5)', &
+                    this_pe,a_step,i_pe,j_pe, int(local_slmsk(i_pe,j_pe)), &
+                    int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe)), &
+                    int(IPD_data(nb)%Sfcprop%stype(ix)), &
+                    int(mn_static%soil_type_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%landfrac(ix), &
+                    int(mn_static%land_frac_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%lakefrac(ix), &
+                    IPD_data(nb)%Sfcprop%oceanfrac(ix)
+              endif
+            endif
+          endif
+        endif
+      enddo
+    enddo
+    
+    print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2)
+    
+    line = ""
+    do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
+      write(num_char, "(I1)"), mod(j,10)
+      line = trim(line) // trim(num_char)
+    enddo
+    print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60)',this_pe,a_step,-99,trim(line)
+    
+    do i=lbound(local_slmsk,1), ubound(local_slmsk,1)
+      line = ""
+      num_land = 0
+      num_water = 0
+
+      do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
+        
+        if (local_slmsk(i,j) .eq. 1) then
+          ! land
+          line = trim(line) // "+"
+          num_land = num_land + 1
+        elseif (local_slmsk(i,j) .eq. 2) then
+          ! Water
+          line = trim(line) // "T"
+        elseif (local_slmsk(i,j) .eq. 0) then
+          ! Zero == lake?
+          line = trim(line) // "."
+          num_water = num_water + 1
+        elseif (local_slmsk(i,j) .eq. 8) then
+          ! Missing/edge
+          line = trim(line) // "M"
+        else
+          ! Unknown
+          print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," j=",I3," slmsk=",E12.5)',this_pe,a_step,i,j, local_slmsk(i,j)
+          write (mask_char, "(I1)") int(local_slmsk(i,j))
+          line = trim(line) // mask_char
+        endif
+      enddo
+      print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60," ",I2," ",I2)',this_pe,a_step,i,trim(line), num_land, num_water
+    enddo
+  end subroutine log_landsea_mask
+  
+  
+  subroutine validate_geo_coords(tag, geo_grid, nest_geo_grid, refine, ioffset, joffset)
+    character(len=*)                     :: tag
+    real(kind=kind_phys), allocatable, intent(in)  :: geo_grid(:,:) 
+    real(kind=kind_phys), allocatable, intent(in)  :: nest_geo_grid(:,:)
+    integer, intent(in) :: refine, ioffset, joffset
+
+    integer :: i,j, this_pe
+    real(kind=kind_phys) :: diff
+
+    this_pe = mpp_pe()
+
+    do i = lbound(nest_geo_grid,1), ubound(nest_geo_grid,1)
+      do j = lbound(nest_geo_grid,2), ubound(nest_geo_grid,2)
+
+        diff = nest_geo_grid(i,j) - geo_grid((ioffset-1)*refine+i, (joffset-1)*refine+j)
+        print '("[INFO] WDR VALIDATEGEO tag=",A3," npe=",I0," i=",I0," j=",I0," diff=",F20.12," nest_val=",F16.12)', tag, this_pe, i, j, diff, nest_geo_grid(i,j)
+
+      enddo
+    enddo
+      
+  end subroutine validate_geo_coords
+
+  subroutine overwrite_with_nest_init_values_r8(tag, var_grid, nest_var_grid, refine, ioffset, joffset)
+    character(len=*)                     :: tag
+    real*8, allocatable, intent(inout)   :: var_grid(:,:) 
+    real*8, allocatable, intent(in)      :: nest_var_grid(:,:)
+
+    integer, intent(in) :: refine, ioffset, joffset
+    integer :: i,j, this_pe
+
+!    this_pe = mpp_pe()
+
+    do i = lbound(nest_var_grid,1), ubound(nest_var_grid,1)
+      do j = lbound(nest_var_grid,2), ubound(nest_var_grid,2)
+        var_grid((ioffset-1)*refine+i, (joffset-1)*refine+j) = nest_var_grid(i,j)
+      enddo
+    enddo
+      
+  end subroutine overwrite_with_nest_init_values_r8
+
+  subroutine overwrite_with_nest_init_values_r4(tag, var_grid, nest_var_grid, refine, ioffset, joffset)
+    character(len=*)                     :: tag
+    real*4, allocatable, intent(inout)   :: var_grid(:,:) 
+    real*4, allocatable, intent(in)      :: nest_var_grid(:,:)
+
+    integer, intent(in) :: refine, ioffset, joffset
+    integer :: i,j, this_pe
+
+!    this_pe = mpp_pe()
+
+    do i = lbound(nest_var_grid,1), ubound(nest_var_grid,1)
+      do j = lbound(nest_var_grid,2), ubound(nest_var_grid,2)
+        var_grid((ioffset-1)*refine+i, (joffset-1)*refine+j) = nest_var_grid(i,j)
+      enddo
+    enddo
+      
+  end subroutine overwrite_with_nest_init_values_r4
+
+
+
+
+  subroutine validate_navigation_fields(tag, Atm_block, IPD_control, IPD_data, parent_grid_num, child_grid_num)
+    character(len=*)                     :: tag
+    type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
+    type(IPD_control_type), intent(in)   :: IPD_control   !< Physics metadata
+    type(IPD_data_type), intent(in)      :: IPD_data(:)   !< Physics variable data
+    integer, intent(in)                  :: parent_grid_num, child_grid_num
+
+    
+    character(len=160)  :: line
+    character(len=1)    :: mask_char
+    character(len=1)    :: num_char
+    integer :: i,j
+    integer :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, refine
+    integer :: ioffset, joffset
+    real    :: local_slmsk(Atm(2)%bd%isd:Atm(2)%bd%ied, Atm(2)%bd%jsd:Atm(2)%bd%jed)
+    integer :: nz, this_pe, n
+    integer :: num_land, num_water
+
+    this_pe = mpp_pe()
+    n = mygrid
+
+    refine = Atm(child_grid_num)%neststruct%refinement
+    ioffset = Atm(child_grid_num)%neststruct%ioffset
+    joffset = Atm(child_grid_num)%neststruct%joffset
+
+    local_slmsk = 8
+    print '("[INFO] WDR VALIDATE local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
+    
+    do nb = 1,Atm_block%nblks
+      blen = Atm_block%blksz(nb)
+      do ix = 1, blen
+        i_pe = Atm_block%index(nb)%ii(ix)
+        j_pe = Atm_block%index(nb)%jj(ix)
+        
+        !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+        
+        local_slmsk(i_pe, j_pe) = IPD_data(nb)%Sfcprop%slmsk(ix)
+        
+        if (allocated(Moving_nest)) then
+          if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
+            !print '("[INFO] WDR VALIDATE local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+
+            if (int(local_slmsk(i_pe,j_pe)) .ne. 8) then
+              if (int(local_slmsk(i_pe,j_pe)) .ne. int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe))) then
+                print '("[INFO] WDR mismatch VALIDATE A tag=",A4," npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," IPD%slmsk=",I0," phys%slmsk=",I0," fp_slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," ipd%landfrac=",F10.5," land_frac_grid=",F12.5," ipd%lakefrac=",F10.5," ipd%oceanfrac=",F10.5)', &
+                    tag, this_pe,a_step,i_pe,j_pe, int(local_slmsk(i_pe,j_pe)), &
+                    int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe)), &
+                    int(mn_static%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    int(IPD_data(nb)%Sfcprop%stype(ix)), &
+                    int(mn_static%soil_type_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%landfrac(ix), &
+                    int(mn_static%land_frac_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%lakefrac(ix), &
+                    IPD_data(nb)%Sfcprop%oceanfrac(ix)
+              endif
+
+
+!              if ((i_pe .eq. 149 .and. j_pe .eq. 169) .or.(i_pe .eq. 152 .and. j_pe .eq. 169) .or. int(local_slmsk(i_pe,j_pe)) .ne. int(mn_static%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe))) then
+              if (int(local_slmsk(i_pe,j_pe)) .ne. int(mn_static%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe))) then
+                print '("[INFO] WDR mismatch VALIDATE B tag=",A4," npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," IPD%slmsk=",I0," phys%slmsk=",I0," fp_slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," ipd%landfrac=",F10.5," land_frac_grid=",F12.5," ipd%lakefrac=",F10.5," ipd%oceanfrac=",F10.5)', &
+                    tag, this_pe,a_step,i_pe,j_pe, int(local_slmsk(i_pe,j_pe)), &
+                    int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe)), &
+                    int(mn_static%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    int(IPD_data(nb)%Sfcprop%stype(ix)), &
+                    int(mn_static%soil_type_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%landfrac(ix), &
+                    int(mn_static%land_frac_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    IPD_data(nb)%Sfcprop%lakefrac(ix), &
+                    IPD_data(nb)%Sfcprop%oceanfrac(ix)
+              endif
+
+
+
+            endif
+          endif
+        endif
+      enddo
+    enddo
+
+
+
+  end subroutine validate_navigation_fields
+
+
   !>@brief The subroutine 'dump_moving_nest' outputs native grid format data to netCDF files
   !>@details This subroutine exports model variables using FMS IO to netCDF files if tsvar_out is set to .True.
   subroutine dump_moving_nest(Atm_block, IPD_control, IPD_data, time_step)
@@ -254,12 +532,6 @@ contains
     type(domain2d), pointer              :: domain_coarse, domain_fine
     logical                              :: is_fine_pe
     integer :: parent_grid_num, child_grid_num, nz, this_pe, n
-    character(len=160)  :: line
-    character(len=1)    :: mask_char
-    integer             :: i,j
-
-    integer :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, refine
-    real :: local_slmsk(Atm(2)%bd%isd:Atm(2)%bd%ied, Atm(2)%bd%jsd:Atm(2)%bd%jed)
 
     this_pe = mpp_pe()
     n = mygrid
@@ -271,81 +543,24 @@ contains
     domain_coarse => Atm(parent_grid_num)%domain
     is_fine_pe = Atm(n)%neststruct%nested .and. ANY(Atm(n)%pelist(:) == this_pe)
     nz = Atm(n)%npz
-    refine = Atm(child_grid_num)%neststruct%refinement
 
     ! Enable this to dump debug netCDF files.  Files are automatically closed when dumped.
     !if (mod(a_step, 80) .eq. 0 ) then
     !  if (tsvar_out) call mn_prog_dump_to_netcdf(Atm(n), a_step, "tsavar", is_fine_pe, domain_coarse, domain_fine, nz)
     !  if (tsvar_out) call mn_phys_dump_to_netcdf(Atm(n), Atm_block, IPD_control, IPD_data, a_step, "tsavar", is_fine_pe, domain_coarse, domain_fine, nz)
     !endif
-    if (a_step .ge. 310) then
-      if (tsvar_out) call mn_phys_dump_to_netcdf(Atm(n), Atm_block, IPD_control, IPD_data, a_step, "tsavar", is_fine_pe, domain_coarse, domain_fine, nz)
-    endif
+    !if (a_step .ge. 310) then
+    !if (mod(a_step, 80) .eq. 0 ) then
+    !  if (tsvar_out) call mn_phys_dump_to_netcdf(Atm(n), Atm_block, IPD_control, IPD_data, a_step, "tsavar", is_fine_pe, domain_coarse, domain_fine, nz)
+    !endif
 
-    if (this_pe .eq. 60) then
-      do i=lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1)
-        line = ""
-        do j=lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
-          print '("[INFO] WDR oro size npe=",I0," is_allocated=",L1)', this_pe, allocated(Atm(n)%oro)
-          print '("[INFO] WDR oro size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1), lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
-          if (Atm(n)%oro(i,j) .eq. 1) then
-            ! land
-            line = trim(line) // "+"
-          elseif (Atm(n)%oro(i,j) .eq. 2) then
-            ! Water
-            line = trim(line) // "."
-          else
-            ! Unknown
-            line = trim(line) // "X"
-          endif
-        enddo
-        print '("[INFO] WDR oro npe=",I0," time=",I0," i=",I0," ",A80)',this_pe,a_step,i,trim(line)
+   ! if (is_fine_pe) then
+   !   call validate_navigation_fields("DUMP", Atm_block, IPD_control, IPD_data, parent_grid_num, child_grid_num)
+   ! endif
 
-      enddo
-
-
-      local_slmsk = 8
-      print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
-
-      do nb = 1,Atm_block%nblks
-        blen = Atm_block%blksz(nb)
-        do ix = 1, blen
-          i_pe = Atm_block%index(nb)%ii(ix)
-          j_pe = Atm_block%index(nb)%jj(ix)
-
-          print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
-
-          local_slmsk(i_pe, j_pe) = IPD_data(nb)%Sfcprop%slmsk(ix)
-
-        enddo
-      enddo
-
-      do i=lbound(local_slmsk,1), ubound(local_slmsk,1)
-        line = ""
-        do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
-          print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2)
-          if (local_slmsk(i,j) .eq. 1) then
-            ! land
-            line = trim(line) // "+"
-          elseif (local_slmsk(i,j) .eq. 2) then
-            ! Water
-            line = trim(line) // "."
-          else
-            ! Unknown
-            write (mask_char, "(I1)") int(local_slmsk(i,j))
-            line = trim(line) // mask_char
-          endif
-        enddo
-        print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A80)',this_pe,a_step,i,trim(line)
-
-      enddo
-
-
-
-
-
-    endif
-
+    !if (this_pe .eq. 88 .or. this_pe .eq. 89) then
+    !  call log_landsea_mask(Atm_block, IPD_control, IPD_data, time_step, parent_grid_num, child_grid_num)
+    !endif
 
   end subroutine dump_moving_nest
 
@@ -589,7 +804,7 @@ contains
     logical, save                          :: first_nest_move = .true.
     type(grid_geometry), save              :: parent_geo
     type(grid_geometry), save              :: fp_super_tile_geo
-    type(mn_surface_grids), save           :: mn_static
+!    type(mn_surface_grids), save           :: mn_static
     real(kind=R_GRID), allocatable, save   :: p_grid(:,:,:)
     real(kind=R_GRID), allocatable, save   :: p_grid_u(:,:,:)
     real(kind=R_GRID), allocatable, save   :: p_grid_v(:,:,:)
@@ -628,17 +843,25 @@ contains
     real(kind=R_GRID)   :: pi = 4 * atan(1.0d0)
     real                :: rad2deg
     logical             :: move_noahmp
+    integer             :: static_nest_num
     logical             :: use_timers
+    real(kind=kind_phys):: maxSkinTempK
 
     !! For NOAHMP
     ! (/0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0/) -- 3 snow levels, 4 soil levels
     real :: zsns_default(-2:4)
     zsns_default = [0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0 ]
 
-
     rad2deg = 180.0 / pi
 
     this_pe = mpp_pe()
+
+    ! Highest satellite observed skin temperatures on Earth are on the order of +70C/343K/+160F
+    ! Mildrexler, D. J., M. Zhao, and S. W. Running, 2011: Satellite Finds Highest Land Skin Temperatures on Earth. Bull. Amer. Meteor. Soc., 92, 855–860, 
+    !    https://doi.org/10.1175/2011BAMS3067.1.
+    ! https://journals.ametsoc.org/view/journals/bams/92/7/2011bams3067_1.xml?tab_body=pdf
+    
+    maxSkinTempK = 273.15 + 80.0
 
     use_timers = Atm(n)%flagstruct%fv_timers
 
@@ -813,6 +1036,8 @@ contains
         ! Also read in other static variables from the orography and surface files
 
         if (first_nest_move) then
+          ! Compute this more flexibly
+          static_nest_num = 8
 
           ! TODO set pelist for the correct nest instead of hard-coded Atm(2)%pelist to allow multiple moving nests
 
@@ -839,16 +1064,17 @@ contains
           call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, 1, Atm(2)%pelist, Moving_nest(child_grid_num)%mn_flag%surface_dir, "oro_data", "slmsk", mn_static%parent_ls_mask_grid,  parent_tile)
           call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, 1, Atm(2)%pelist, Moving_nest(child_grid_num)%mn_flag%surface_dir, "oro_data", "land_frac", mn_static%parent_land_frac_grid,  parent_tile)
 
-          !print '("[INFO] WDR parent_ls_mask_grid npe=",I0," mn_static%parent_ls_mask_grid(",I0,":",I0,",",I0,":",I0,")")', this_pe, lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,1), lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,2)
 
-          ! Alter parent_ls_mask_grid to set lakes to water(sea) values
-          do i_idx = lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,1)
-            do j_idx = lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,2)
-              if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%parent_land_frac_grid(i_idx, j_idx)) == 0 ) then
-                mn_static%parent_ls_mask_grid(i_idx, j_idx) = 0
-              endif
-            enddo
-          enddo
+          !! Lat lons for debugging
+          call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "oro_data", "geolat", mn_static%geolat_grid,  parent_tile)
+          call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "oro_data", "geolon", mn_static%geolon_grid,  parent_tile)
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "oro_data", "geolat", mn_static%nest_geolat_grid,  static_nest_num)
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/.." , "oro_data", "geolon", mn_static%nest_geolon_grid,  static_nest_num)
+
+          !call validate_geo_coords("LAT", mn_static%geolat_grid, mn_static%nest_geolat_grid, x_refine, ioffset, joffset)
+          !call validate_geo_coords("LON", mn_static%geolon_grid, mn_static%nest_geolon_grid, x_refine, ioffset, joffset)
+
 
           call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "substrate_temperature", "substrate_temperature", mn_static%deep_soil_temp_grid,  parent_tile)
           ! set any -999s to +4C
@@ -857,6 +1083,112 @@ contains
           call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "soil_type", "soil_type", mn_static%soil_type_grid,  parent_tile)
           ! To match initialization behavior, set any -999s to 0 in soil_type
           call mn_replace_low_values(mn_static%soil_type_grid, -100.0, 0.0)
+
+          ! Need parent soil type to determine lakes
+          call mn_static_read_hires(Atm(1)%npx, Atm(1)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "soil_type", "soil_type", mn_static%parent_soil_type_grid,  parent_tile)
+          ! To match initialization behavior, set any -999s to 0 in soil_type
+          call mn_replace_low_values(mn_static%parent_soil_type_grid, -100.0, 0.0)
+
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          !! Read static grids for nest initialization
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "oro_data", "slmsk", mn_static%nest_ls_mask_grid,  static_nest_num)
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "oro_data", "land_frac", mn_static%nest_land_frac_grid,  static_nest_num)
+
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "substrate_temperature", "substrate_temperature", mn_static%nest_deep_soil_temp_grid,  static_nest_num)
+          call mn_replace_low_values(mn_static%nest_deep_soil_temp_grid, -100.0, 277.0)
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "soil_type", "soil_type", mn_static%nest_soil_type_grid,  static_nest_num)
+          ! To match initialization behavior, set any -999s to 0 in soil_type
+          call mn_replace_low_values(mn_static%nest_soil_type_grid, -100.0, 0.0)
+
+
+
+
+          !print '("[INFO] WDR parent_ls_mask_grid npe=",I0," mn_static%parent_ls_mask_grid(",I0,":",I0,",",I0,":",I0,")")', this_pe, lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,1), lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,2)
+
+          ! Alter hires full panel ls_mask_grid to set lakes to water(sea) values
+          do i_idx = lbound(mn_static%ls_mask_grid,1), ubound(mn_static%ls_mask_grid,1)
+            do j_idx = lbound(mn_static%ls_mask_grid,1), ubound(mn_static%ls_mask_grid,2)
+              !if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%land_frac_grid(i_idx, j_idx)) == 0 ) then
+              !!if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. mn_static%land_frac_grid(i_idx, j_idx) .lt. 0.999 ) then
+
+              ! Use epsilon of 1.0e-6 on land_frac_grid, based on CCPP code in physics/physics/gcycle.F90
+              !  Fixes a bug where land mask changes with first nest move if land_frac_grid = 0.5000
+              if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%land_frac_grid(i_idx, j_idx)-1.0e-6_kind_phys) .eq. 0 ) then
+                mn_static%ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              ! Soil type adjustments from io/fv3atm_sfc_io.F90
+              if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. int(mn_static%soil_type_grid(i_idx, j_idx)) .eq. 14 ) then
+                mn_static%ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. mn_static%soil_type_grid(i_idx, j_idx) .lt. 0.8 ) then
+                mn_static%ls_mask_grid(i_idx, j_idx) = 0
+              endif
+            enddo
+          enddo
+
+
+          ! Alter parent full panel ls_mask_grid to set lakes to water(sea) values
+          do i_idx = lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,1)
+            do j_idx = lbound(mn_static%parent_ls_mask_grid,1), ubound(mn_static%parent_ls_mask_grid,2)
+              !if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%parent_land_frac_grid(i_idx, j_idx)) == 0 ) then
+              !!if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. mn_static%parent_land_frac_grid(i_idx, j_idx) .lt. 0.999 ) then
+
+              ! Use epsilon of 1.0e-6 on land_frac_grid, based on CCPP code in physics/physics/gcycle.F90
+              !  Fixes a bug where land mask changes with first nest move if land_frac_grid = 0.5000
+              if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%parent_land_frac_grid(i_idx, j_idx)-1.0e-6_kind_phys) .eq. 0 ) then
+                mn_static%parent_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              ! Soil type adjustments from io/fv3atm_sfc_io.F90
+              if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. int(mn_static%parent_soil_type_grid(i_idx, j_idx)) .eq. 14 ) then
+                mn_static%parent_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              if (mn_static%parent_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. mn_static%parent_soil_type_grid(i_idx, j_idx) .lt. 0.8 ) then
+                mn_static%parent_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+            enddo
+          enddo
+
+
+
+          ! Alter nest panel ls_mask_grid to set lakes to water(sea) values
+          do i_idx = lbound(mn_static%nest_ls_mask_grid,1), ubound(mn_static%nest_ls_mask_grid,1)
+            do j_idx = lbound(mn_static%nest_ls_mask_grid,1), ubound(mn_static%nest_ls_mask_grid,2)
+
+              ! Use epsilon of 1.0e-6 on land_frac_grid, based on CCPP code in physics/physics/gcycle.F90
+              !  Fixes a bug where land mask changes with first nest move if land_frac_grid = 0.5000
+              if (mn_static%nest_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%nest_land_frac_grid(i_idx, j_idx)-1.0e-6_kind_phys) .eq. 0 ) then
+                mn_static%nest_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              ! Soil type adjustments from io/fv3atm_sfc_io.F90
+              if (mn_static%nest_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. int(mn_static%nest_soil_type_grid(i_idx, j_idx)) .eq. 14 ) then
+                mn_static%nest_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+              if (mn_static%nest_ls_mask_grid(i_idx, j_idx) .eq. 1 .and. mn_static%nest_soil_type_grid(i_idx, j_idx) .lt. 0.8 ) then
+                mn_static%nest_ls_mask_grid(i_idx, j_idx) = 0
+              endif
+            enddo
+          enddo
+
+
+          ! Update full panel with nest init values (there are a few mismatches)
+          ! TODO maybe add orog_raw/orog_filt
+          call overwrite_with_nest_init_values("ls_mask", mn_static%ls_mask_grid, mn_static%nest_ls_mask_grid, x_refine, ioffset, joffset)
+
+          ! Initialize the land sea mask (slmsk) in the mn_phys structure
+          !  Probably important this is done after adjusting for lakes!
+          call mn_phys_set_slmsk(Atm, n, mn_static, ioffset, joffset, x_refine)
+
+          !if (is_fine_pe) then
+          !  call validate_navigation_fields("INIT", Atm_block, IPD_control, IPD_data, parent_grid_num, child_grid_num)
+          !endif
+          
+          call overwrite_with_nest_init_values("soil_type", mn_static%soil_type_grid, mn_static%nest_soil_type_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("land_frac", mn_static%land_frac_grid, mn_static%nest_land_frac_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("deep_soil_temp", mn_static%deep_soil_temp_grid, mn_static%nest_deep_soil_temp_grid, x_refine, ioffset, joffset)
 
 
           !! TODO investigate reading high-resolution veg_frac and veg_greenness
@@ -915,6 +1247,66 @@ contains
           call mn_replace_low_values(mn_static%alvwf_grid, -100.0, 0.06)
           call mn_replace_low_values(mn_static%alnsf_grid, -100.0, 0.06)
           call mn_replace_low_values(mn_static%alnwf_grid, -100.0, 0.06)
+
+
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          !!  Read in static nest variables
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "vegetation_type", "vegetation_type", mn_static%nest_veg_type_grid,  static_nest_num)
+          ! To match initialization behavior, set any -999s to 0 in veg_type
+          call mn_replace_low_values(mn_static%nest_veg_type_grid, -100.0, 0.0)
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "slope_type", "slope_type", mn_static%nest_slope_type_grid,  static_nest_num)
+          ! To match initialization behavior, set any -999s to 0 in veg_type
+          call mn_replace_low_values(mn_static%nest_slope_type_grid, -100.0, 0.0)
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "maximum_snow_albedo", "maximum_snow_albedo", mn_static%nest_max_snow_alb_grid,  static_nest_num)
+          ! Set any -999s to 0.5
+          call mn_replace_low_values(mn_static%nest_max_snow_alb_grid, -100.0, 0.5)
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "facsf", "facsf", mn_static%nest_facsf_grid,  static_nest_num)
+
+          allocate(mn_static%nest_facwf_grid(lbound(mn_static%nest_facsf_grid,1):ubound(mn_static%nest_facsf_grid,1),lbound(mn_static%nest_facsf_grid,2):ubound(mn_static%nest_facsf_grid,2)))
+
+          ! For land points, set facwf = 1.0 - facsf
+          ! To match initialization behavior, set any -999s to 0
+          do i=lbound(mn_static%nest_facsf_grid,1),ubound(mn_static%nest_facsf_grid,1)
+            do j=lbound(mn_static%nest_facsf_grid,2),ubound(mn_static%nest_facsf_grid,2)
+              if (mn_static%nest_facsf_grid(i,j) .lt. -100) then
+                mn_static%nest_facsf_grid(i,j) = 0
+                mn_static%nest_facwf_grid(i,j) = 0
+              else
+                mn_static%nest_facwf_grid(i,j) = 1.0 - mn_static%nest_facsf_grid(i,j)
+              endif
+            enddo
+          enddo
+
+
+          call overwrite_with_nest_init_values("veg_type", mn_static%veg_type_grid, mn_static%nest_veg_type_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("slope_type", mn_static%slope_type_grid, mn_static%nest_slope_type_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("max_snow_alb", mn_static%max_snow_alb_grid, mn_static%nest_max_snow_alb_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("facsf", mn_static%facsf_grid, mn_static%nest_facsf_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("facwf", mn_static%facwf_grid, mn_static%nest_facwf_grid, x_refine, ioffset, joffset)
+
+
+
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "snowfree_albedo", "visible_black_sky_albedo", mn_static%nest_alvsf_grid,  static_nest_num)
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "snowfree_albedo", "visible_white_sky_albedo", mn_static%nest_alvwf_grid,  static_nest_num)
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "snowfree_albedo", "near_IR_black_sky_albedo", mn_static%nest_alnsf_grid,  static_nest_num)
+          call mn_static_read_hires(Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", "snowfree_albedo", "near_IR_black_sky_albedo", mn_static%nest_alnwf_grid,  static_nest_num)
+          ! Set the -999s to small value of 0.06, matching initialization code in chgres
+
+          call mn_replace_low_values(mn_static%nest_alvsf_grid, -100.0, 0.06)
+          call mn_replace_low_values(mn_static%nest_alvwf_grid, -100.0, 0.06)
+          call mn_replace_low_values(mn_static%nest_alnsf_grid, -100.0, 0.06)
+          call mn_replace_low_values(mn_static%nest_alnwf_grid, -100.0, 0.06)
+
+
+          call overwrite_with_nest_init_values("alvsf", mn_static%alvsf_grid, mn_static%nest_alvsf_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("alvwf", mn_static%alvwf_grid, mn_static%nest_alvwf_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("alnsf", mn_static%alnsf_grid, mn_static%nest_alnsf_grid, x_refine, ioffset, joffset)
+          call overwrite_with_nest_init_values("alnwf", mn_static%alnwf_grid, mn_static%nest_alnwf_grid, x_refine, ioffset, joffset)
 
         endif
 
@@ -1166,42 +1558,103 @@ contains
       if (use_timers) call mpp_clock_begin (id_movnest7_3)
 
       if (is_fine_pe) then
-        if (move_noahmp) then
-          !print '("[INFO] WDR NOAHMP reset negative values npe=",I0)', mpp_pe()
-          do i=isd,ied
-            do j=jsd,jed
+        !print '("[INFO] WDR NOAHMP reset negative values npe=",I0)', mpp_pe()
+        !          do i=isd,ied
+        !            do j=jsd,jed
+        
+        !  This just needs to check in the compute domain.  While the mn_phys fields extend into the halo, the IPD structure from CCPP only covers the compute domain.
+        do i=isc,iec
+          do j=jsc,jec
+            
+            ! Regular physics variables
+            do k=lbound(Moving_nest(n)%mn_phys%stc,3),ubound(Moving_nest(n)%mn_phys%stc,3)
+              if (Moving_nest(n)%mn_phys%stc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%stc(i,j,k) .gt. maxSkinTempK ) then
+                print '("[INFO] WDR NOAHMP reset soil temp values npe=",I0," i=",I0," j=",I0," stc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%stc(i,j,k)
+                Moving_nest(n)%mn_phys%stc(i,j,k) = 298.0 
+              endif
+              if (Moving_nest(n)%mn_phys%smc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%smc(i,j,k) .gt.  1000.0 ) then
+                print '("[INFO] WDR NOAHMP reset soil moisture values npe=",I0," i=",I0," j=",I0," smc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%smc(i,j,k)
+                Moving_nest(n)%mn_phys%smc(i,j,k) = 0.3 
+              endif
+              if (Moving_nest(n)%mn_phys%slc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%slc(i,j,k) .gt.  1000.0 ) then
+                print '("[INFO] WDR NOAHMP reset soil liquid values npe=",I0," i=",I0," j=",I0," slc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%slc(i,j,k)
+                Moving_nest(n)%mn_phys%slc(i,j,k) = 0.3 
+              endif
+            enddo
+
+
+            if (Moving_nest(n)%mn_phys%canopy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%canopy(i,j) .gt. 100.0 ) then
+              print '("[INFO] WDR NOAHMP reset canopy water values npe=",I0," i=",I0," j=",I0," canopy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%canopy(i,j)
+              Moving_nest(n)%mn_phys%canopy(i,j) = 0.0  ! Zero out if no other information
+            endif
+            if (Moving_nest(n)%mn_phys%vegfrac(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%vegfrac(i,j) .gt. 100.0 ) then
+              print '("[INFO] WDR NOAHMP reset vegfrac values npe=",I0," i=",I0," j=",I0," vegfrac=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%vegfrac(i,j)
+              Moving_nest(n)%mn_phys%vegfrac(i,j) = 0.5  ! Default to half.  Confirmed that values are fractions.
+            endif
+
+
+
+
+            if (move_noahmp) then
+              
+              !! Patch to reset slmsk
+              !if (Moving_nest(n)%mn_phys%slmsk(i,j) .eq. 1 .and. Moving_nest(n)%mn_phys%tgxy(i,j) .gt. 1e+10) then
+              !  print '("[INFO] WDR NOAHMP reset land to water for lake npe=",I0," i=",I0," j=",I0," tgxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tgxy(i,j)
+              !  Moving_nest(n)%mn_phys%slmsk(i,j) = 0
+              !endif
+              
               ! slmsk(:,:)   !< land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+
+              !if (this_pe .eq. 89) then
+              !  print '("[INFO] WDR NOAHMP debug npe=",I0," i=",I0," j=",I0," shdmax=",E12.5," shdmin=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%shdmax(i,j), Moving_nest(n)%mn_phys%shdmin(i,j)
+              !  print '("[INFO] WDR NOAHMP debug npe=",I0," i=",I0," j=",I0," tsfc=",E12.5," tsfcl=",E12.5," tsfco=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tsfc(i,j), Moving_nest(n)%mn_phys%tsfcl(i,j), Moving_nest(n)%mn_phys%tsfco(i,j)
+              !endif
+
+              
               if (Moving_nest(n)%mn_phys%slmsk(i,j) .eq. 1) then
                 ! NOAH MP Variables
                 ! This is normally a negative number
-!                if (Moving_nest(n)%mn_phys%snowxy(i,j) .lt. -9.0 .or. Moving_nest(n)%mn_phys%snowxy(i,j) .gt. 9.0 ) then
-!                  print '("[INFO] WDR NOAHMP reset negative values npe=",I0," i=",I0," j=",I0," snowxy=",E12.5," alboldoxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snowxy(i,j), Moving_nest(n)%mn_phys%alboldxy(i,j)
-!                  Moving_nest(n)%mn_phys%snowxy(i,j) = 0.0
-!                endif
+                if (Moving_nest(n)%mn_phys%snowxy(i,j) .lt. -9.0 .or. Moving_nest(n)%mn_phys%snowxy(i,j) .gt. 9.0 ) then
+                  print '("[INFO] WDR NOAHMP reset negative values npe=",I0," i=",I0," j=",I0," snowxy=",E12.5," alboldoxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snowxy(i,j), Moving_nest(n)%mn_phys%alboldxy(i,j)
+                  print '("[INFO] WDR NOAHMP reset snowxy npe=",I0," i=",I0," j=",I0," land_frac=",E19.12," nint(land_frac)=",I0)', mpp_pe(), i, j, mn_static%land_frac_grid((ioffset-1)*x_refine+i, (joffset-1)*y_refine+j), nint(mn_static%land_frac_grid((ioffset-1)*x_refine+i, (joffset-1)*y_refine+j))
 
+
+                do k=lbound(Moving_nest(n)%mn_phys%hprime,3),ubound(Moving_nest(n)%mn_phys%hprime,3)
+                  print '("[INFO] WDR NOAHMP reset show hprime values npe=",I0," i=",I0," j=",I0," k=",I0," hprime=",E12.5)', mpp_pe(), i, j, k, Moving_nest(n)%mn_phys%hprime(i,j,k)
+                enddo
+                
+
+                  Moving_nest(n)%mn_phys%snowxy(i,j) = 0.0
+                endif
+                
+                if (Moving_nest(n)%mn_phys%soilcolor(i,j) .lt. 1.0 .or. Moving_nest(n)%mn_phys%soilcolor(i,j) .gt. 19.0 ) then
+                  print '("[INFO] WDR NOAHMP reset soilcolor values npe=",I0," i=",I0," j=",I0," soilcolor=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%soilcolor(i,j)
+                  Moving_nest(n)%mn_phys%soilcolor(i,j) = 1.0  ! Default sand/desert bright color
+                endif
+                
                 if (Moving_nest(n)%mn_phys%alboldxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%alboldxy(i,j) .gt. 1.0 ) then
-                  print '("[INFO] WDR NOAHMP reset old albedo alboldxy values npe=",I0," i=",I0," j=",I0," alboldoxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%alboldxy(i,j)
+                  print '("[INFO] WDR NOAHMP reset old albedo alboldxy values npe=",I0," i=",I0," j=",I0," alboldxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%alboldxy(i,j)
                   Moving_nest(n)%mn_phys%alboldxy(i,j) = 0.65  ! Cold start value
                 endif
-
+                
                 do k=lbound(Moving_nest(n)%mn_phys%snicexy,3),ubound(Moving_nest(n)%mn_phys%snicexy,3)
                   if (Moving_nest(n)%mn_phys%snicexy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snicexy(i,j,k) .gt. 100.0 ) then
-                    print '("[INFO] WDR NOAHMP reset ice thickness values npe=",I0," i=",I0," j=",I0," k=",I0," lat,lon=",F9.5,",",F10.5," snicexy=",E12.5," lsnow=",I0,"=",I0)', mpp_pe(), i, j, k, Atm(n)%gridstruct%agrid(i,j,2)*rad2deg, Atm(n)%gridstruct%agrid(i,j,1)*rad2deg - 360.0, Moving_nest(n)%mn_phys%snicexy(i,j,k), IPD_Control%lsnow_lsm_lbound, IPD_Control%lsnow_lsm_ubound
-
-                    print '("[INFO] WDR NOAHMP reset ice thickness values npe=",I0," isd-ied=",I0,"-",I0," jsd-jed",I0,"-",I0," k=",I0,"-",I0)', mpp_pe(), isd, ied, jsd, jed, lbound(Moving_nest(n)%mn_phys%snicexy,3), ubound(Moving_nest(n)%mn_phys%snicexy,3)
-
-
+                    print '("[INFO] WDR NOAHMP reset ice thickness values npe=",I0," a_step=",I0," i=",I0," j=",I0," k=",I0," lat,lon=",F9.5,",",F10.5," snicexy=",E12.5," lsnow=",I0,"-",I0)', mpp_pe(), a_step, i, j, k, Atm(n)%gridstruct%agrid(i,j,2)*rad2deg, Atm(n)%gridstruct%agrid(i,j,1)*rad2deg - 360.0, Moving_nest(n)%mn_phys%snicexy(i,j,k), IPD_Control%lsnow_lsm_lbound, IPD_Control%lsnow_lsm_ubound
+                    
+                    !print '("[INFO] WDR NOAHMP snicexy reset ice thickness values npe=",I0," isd-ied=",I0,"-",I0," jsd-jed",I0,"-",I0," k=",I0,"-",I0)', mpp_pe(), isd, ied, jsd, jed, lbound(Moving_nest(n)%mn_phys%snicexy,3), ubound(Moving_nest(n)%mn_phys%snicexy,3)
+                    
+                    
                     Moving_nest(n)%mn_phys%snicexy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-
+                
                 do k=lbound(Moving_nest(n)%mn_phys%snliqxy,3),ubound(Moving_nest(n)%mn_phys%snliqxy,3)
                   if (Moving_nest(n)%mn_phys%snliqxy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snliqxy(i,j,k) .gt. 100.0 ) then
                     print '("[INFO] WDR NOAHMP reset liq thickness values npe=",I0," i=",I0," j=",I0," snliqxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snliqxy(i,j,k)
                     Moving_nest(n)%mn_phys%snliqxy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-
+                
                 ! (/0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0/) -- 3 snow levels, 4 soil levels
                 do k=lbound(Moving_nest(n)%mn_phys%zsnsoxy,3),ubound(Moving_nest(n)%mn_phys%zsnsoxy,3)
                   if (Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) .lt. -80.0 .or. Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) .gt. 100.0 ) then
@@ -1210,55 +1663,76 @@ contains
                     Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) = zsns_default(k)  ! Cold start value
                   endif
                 enddo
-
-                if (Moving_nest(n)%mn_phys%snowd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snowd(i,j) .gt. 100.0 ) then
+                
+                if (Moving_nest(n)%mn_phys%snowd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snowd(i,j) .gt. 1000.0 ) then
                   print '("[INFO] WDR NOAHMP reset snow thickness values npe=",I0," i=",I0," j=",I0," snowd=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snowd(i,j)
                   Moving_nest(n)%mn_phys%snowd(i,j) = 0.0  ! Cold start value
                 endif
-
-                if (Moving_nest(n)%mn_phys%weasd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%weasd(i,j) .gt. 100.0 ) then
+                
+                if (Moving_nest(n)%mn_phys%weasd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%weasd(i,j) .gt. 1000.0 ) then
                   print '("[INFO] WDR NOAHMP reset snow thickness values npe=",I0," i=",I0," j=",I0," weasd=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%weasd(i,j)
                   Moving_nest(n)%mn_phys%weasd(i,j) = 0.0  ! Cold start value
                 endif
-
+                
                 do k=lbound(Moving_nest(n)%mn_phys%tsnoxy,3),ubound(Moving_nest(n)%mn_phys%tsnoxy,3)
-                  if (Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .gt. 320.0 ) then
+                  if (Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .gt. maxSkinTempK ) then
                     print '("[INFO] WDR NOAHMP reset snow temp values npe=",I0," i=",I0," j=",I0," tsnoxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tsnoxy(i,j,k)
                     Moving_nest(n)%mn_phys%tsnoxy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-
-                if (Moving_nest(n)%mn_phys%tvxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tvxy(i,j) .gt. 320.0 ) then
+                
+                if (Moving_nest(n)%mn_phys%tvxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tvxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset vegetation canopy temp values npe=",I0," i=",I0," j=",I0," tvxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tvxy(i,j)
                   Moving_nest(n)%mn_phys%tvxy(i,j) = 298.0  ! skin temperature
                 endif
-
-                if (Moving_nest(n)%mn_phys%tgxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tgxy(i,j) .gt. 320.0 ) then
+                
+                if (Moving_nest(n)%mn_phys%tgxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tgxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset ground temp values npe=",I0," i=",I0," j=",I0," tgxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tgxy(i,j)
                   Moving_nest(n)%mn_phys%tgxy(i,j) = 298.0  ! skin temperature
                 endif
-
-                if (Moving_nest(n)%mn_phys%tahxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tahxy(i,j) .gt. 320.0 ) then
+                
+                if (Moving_nest(n)%mn_phys%tahxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tahxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset air temp in canopy values npe=",I0," i=",I0," j=",I0," tahxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tahxy(i,j)
                   Moving_nest(n)%mn_phys%tahxy(i,j) = 298.0  ! skin temperature
                 endif
-
-
+                
+                
                 do k=lbound(Moving_nest(n)%mn_phys%stc,3),ubound(Moving_nest(n)%mn_phys%stc,3)
-                  if (Moving_nest(n)%mn_phys%stc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%stc(i,j,k) .gt. 340.0 ) then
+                  if (Moving_nest(n)%mn_phys%stc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%stc(i,j,k) .gt. maxSkinTempK ) then
                     print '("[INFO] WDR NOAHMP reset air temp in canopy values npe=",I0," i=",I0," j=",I0," stc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%stc(i,j,k)
                     Moving_nest(n)%mn_phys%stc(i,j,k) = 298.0  ! skin temperature
                   endif
                 enddo
 
-              endif
-            enddo
-          enddo
-        endif
-      endif
+                if (Moving_nest(n)%mn_phys%cmxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%cmxy(i,j) .gt. 100 ) then
+                  print '("[INFO] WDR NOAHMP reset drag coeff values npe=",I0," i=",I0," j=",I0," cmxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%cmxy(i,j)
+                  Moving_nest(n)%mn_phys%cmxy(i,j) = 2.4D-3
+                endif
+                if (Moving_nest(n)%mn_phys%chxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%chxy(i,j) .gt. 100 ) then
+                  print '("[INFO] WDR NOAHMP reset drag coeff values npe=",I0," i=",I0," j=",I0," chxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%chxy(i,j)
+                  Moving_nest(n)%mn_phys%chxy(i,j) = 2.4D-3
+                endif
+
+                if (Moving_nest(n)%mn_phys%lakefrac(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%lakefrac(i,j) .gt. 100 ) then
+                  print '("[INFO] WDR NOAHMP reset lake frac values npe=",I0," i=",I0," j=",I0," lakefrac=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%lakefrac(i,j)
+                  Moving_nest(n)%mn_phys%lakefrac(i,j) = 0.0
+                endif
+
+                if (Moving_nest(n)%mn_phys%lakedepth(i,j) .lt. -1.0e+04 .or. Moving_nest(n)%mn_phys%lakedepth(i,j) .gt. 2000 ) then
+                  print '("[INFO] WDR NOAHMP reset lake depth values npe=",I0," i=",I0," j=",I0," lakedepth=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%lakedepth(i,j)
+                  Moving_nest(n)%mn_phys%lakedepth(i,j) = 0.0
+                endif
 
 
 
+
+              endif  ! if slmsk=1
+            endif    ! if move_noahmp
+          enddo      ! do j
+        enddo        ! do i
+      endif          ! if is_fine_pe
+      
+      
       if (is_fine_pe) then
         do i=isc,iec
           do j=jsc,jec

@@ -68,7 +68,11 @@ module fv_moving_nest_physics_mod
   use GFS_init,               only: GFS_grid_populate
 
   use boundary_mod,           only: update_coarse_grid, update_coarse_grid_mpp
+#ifdef OVERLOAD_R4
+  use constantsR4_mod,        only: cp_air, rdgas, grav, rvgas, kappa, pstd_mks, hlv
+#else
   use constants_mod,          only: cp_air, rdgas, grav, rvgas, kappa, pstd_mks, hlv
+#endif
   use field_manager_mod,      only: MODEL_ATMOS
   use fv_arrays_mod,          only: fv_atmos_type, fv_nest_type, fv_grid_type, R_GRID
   use fv_moving_nest_types_mod,   only: fv_moving_nest_prog_type, fv_moving_nest_physics_type, mn_surface_grids, fv_moving_nest_type
@@ -352,6 +356,8 @@ contains
 
     if (IPD_Control%lsm == IPD_Control%lsm_noahmp) then
       nb = 1
+      if (.not. associated(IPD_Data(nb)%Sfcprop%scolor)) err_field = 51
+      if (err_field .gt. 0) print '("[ERROR] WDR NOAH MP variable is not associated npe=",I0," err_field=",I0)', this_pe, err_field
       if (.not. associated(IPD_Data(nb)%Sfcprop%snowxy)) err_field = 1
       if (err_field .gt. 0) print '("[ERROR] WDR NOAH MP variable is not associated npe=",I0," err_field=",I0)', this_pe, err_field
       if (.not. associated(IPD_Data(nb)%Sfcprop%tvxy))  err_field = 2
@@ -525,7 +531,11 @@ contains
         endif
 
         if (IPD_Control%lsm == IPD_Control%lsm_noahmp) then
+          mn_phys%soilcolor(i,j)  = IPD_Data(nb)%Sfcprop%scolor(ix)
           mn_phys%snowxy(i,j)     = IPD_Data(nb)%Sfcprop%snowxy(ix)
+          !if (i .eq. 149 .and. j .eq. 169) print '("[INFO] WDR SNOWXY MASK2D npe=",I0," i=",I0," j=",I0," snowxy=",E10.5)', this_pe, i, j, mn_phys%snowxy(i,j)
+          
+
           mn_phys%tvxy(i,j)       = IPD_Data(nb)%Sfcprop%tvxy(ix)
           mn_phys%tgxy(i,j)       = IPD_Data(nb)%Sfcprop%tgxy(ix)
           mn_phys%canicexy(i,j)   = IPD_Data(nb)%Sfcprop%canicexy(ix)
@@ -758,8 +768,9 @@ contains
           endif
 
           if (IPD_Control%lsm == IPD_Control%lsm_noahmp) then
-!            if (this_pe .eq. 72) print '("[INFO] WDR SNOWXY npe=",I0," a_step=",I0," slmsk=",F7.3," snowxy(",I0,",",I0,")=",F12.5,",",E12.5," lat=",F10.5," lon=",F10.5)', this_pe, a_step, IPD_data(nb)%Sfcprop%slmsk(ix), i, j, mn_phys%snowxy(i,j), mn_phys%snowxy(i,j), IPD_data(nb)%Grid%xlat_d(ix), IPD_data(nb)%Grid%xlon_d(ix)-360.0
+            !if (this_pe .eq. 89) print '("[INFO] WDR SNOWXY npe=",I0," a_step=",I0," slmsk=",F7.3," snowxy(",I0,",",I0,")=",F12.5,",",E12.5," lat=",F10.5," lon=",F10.5)', this_pe, a_step, IPD_data(nb)%Sfcprop%slmsk(ix), i, j, mn_phys%snowxy(i,j), mn_phys%snowxy(i,j), IPD_data(nb)%Grid%xlat_d(ix), IPD_data(nb)%Grid%xlon_d(ix)-360.0
 
+            IPD_Data(nb)%Sfcprop%scolor(ix)  = mn_phys%soilcolor(i,j)
             IPD_Data(nb)%Sfcprop%snowxy(ix)     = mn_phys%snowxy(i,j)
             IPD_Data(nb)%Sfcprop%tvxy(ix)       = mn_phys%tvxy(i,j)
             IPD_Data(nb)%Sfcprop%tgxy(ix)       = mn_phys%tgxy(i,j)
@@ -1156,6 +1167,12 @@ contains
 
       !  Land Sea Mask has values of 0 for oceans/lakes, 1 for land, 2 for sea ice
 
+      ! Soil color.  Default is set to sandy soil/desert 1, which seems appropriate for isolated islands
+      !  Reference: https://www.jsg.utexas.edu/noah-mp/files/Users_Guide_v0.pdf
+      call fill_nest_halos_from_parent_masked("soilcol", mn_phys%soilcolor, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+          Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls_mask_grid, M_LAND, 1.0D0)
+
       call fill_nest_halos_from_parent_masked("snowxy", mn_phys%snowxy, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
           is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls_mask_grid, M_LAND, 0.0D0)
@@ -1406,6 +1423,7 @@ contains
     endif
 
     if (move_physics .and. IPD_Control%lsm == IPD_Control%lsm_noahmp) then
+      call mn_var_fill_intern_nest_halos(mn_phys%soilcolor, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%snowxy, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%tvxy, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%tgxy, domain_fine, is_fine_pe)
@@ -1604,6 +1622,8 @@ contains
     endif
 
     if (move_physics .and. IPD_Control%lsm == IPD_Control%lsm_noahmp) then
+      call mn_var_shift_data(mn_phys%soilcolor, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%snowxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%tvxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &

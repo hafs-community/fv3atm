@@ -83,16 +83,26 @@ module fv_moving_nest_types_mod
     real, allocatable  :: orog_grid(:,:)               _NULL  ! orography -- raw or filtered depending on namelist option, in meters
     real, allocatable  :: orog_std_grid(:,:)           _NULL  ! terrain standard deviation for gravity wave drag, in meters (?)
     real, allocatable  :: ls_mask_grid(:,:)            _NULL  ! land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+    ! Land frac needs to be kind_phys because CCPP defines it that way.  Can have rounding mismatches around 0.5 if types don't match.
     real, allocatable  :: parent_ls_mask_grid(:,:)     _NULL  ! Coarse parent land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
-    real, allocatable  :: parent_land_frac_grid(:,:)   _NULL  ! Coarse parent land fraction grid; figure out where lakes are located
-    real, allocatable  :: land_frac_grid(:,:)          _NULL  ! Continuous land fraction - 0.0 ocean, 0.5 half of each, 1.0 all land
+    real(kind=kind_phys), allocatable  :: parent_land_frac_grid(:,:)   _NULL  ! Coarse parent land fraction grid; figure out where lakes are located
+    real(kind=kind_phys), allocatable  :: land_frac_grid(:,:)          _NULL  ! Continuous land fraction - 0.0 ocean, 0.5 half of each, 1.0 all land
 
     real, allocatable  :: parent_orog_grid(:,:)        _NULL  ! parent orography -- only used for terrain_smoother=1.
     !     raw or filtered depending on namelist option,in meters
 
+
+    real(kind=kind_phys), allocatable  :: geolat_grid(:,:)          _NULL 
+    real(kind=kind_phys), allocatable  :: geolon_grid(:,:)          _NULL 
+    real(kind=kind_phys), allocatable  :: nest_geolat_grid(:,:)          _NULL 
+    real(kind=kind_phys), allocatable  :: nest_geolon_grid(:,:)          _NULL 
+
+
+
     ! Soil variables
     real, allocatable  :: deep_soil_temp_grid(:,:)     _NULL  ! deep soil temperature at 5m, in degrees K
     real, allocatable  :: soil_type_grid(:,:)          _NULL  ! STATSGO soil type
+    real, allocatable  :: parent_soil_type_grid(:,:)          _NULL  ! STATSGO soil type
 
     ! Vegetation variables
     real, allocatable  :: veg_frac_grid(:,:)           _NULL  ! vegetation fraction
@@ -120,6 +130,37 @@ module fv_moving_nest_types_mod
     real, allocatable  :: alvwf_grid(:,:)              _NULL  ! Visible white sky albedo; netCDF file has monthly values
     real, allocatable  :: alnsf_grid(:,:)              _NULL  ! Near IR black sky albedo; netCDF file has monthly values
     real, allocatable  :: alnwf_grid(:,:)              _NULL  ! Near IR white sky albedo; netCDF file has monthly values
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !! Nest variables
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    real, allocatable  :: nest_ls_mask_grid(:,:)            _NULL  ! land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+    real(kind=kind_phys), allocatable  :: nest_land_frac_grid(:,:)          _NULL  ! Continuous land fraction - 0.0 ocean, 0.5 half of each, 1.0 all land
+
+    ! Soil variables
+    real, allocatable  :: nest_deep_soil_temp_grid(:,:)     _NULL  ! deep soil temperature at 5m, in degrees K
+    real, allocatable  :: nest_soil_type_grid(:,:)          _NULL  ! STATSGO soil type
+    real, allocatable  :: nest_parent_soil_type_grid(:,:)          _NULL  ! STATSGO soil type
+
+    ! Vegetation variables
+    real, allocatable  :: nest_veg_frac_grid(:,:)           _NULL  ! vegetation fraction
+    real, allocatable  :: nest_veg_type_grid(:,:)           _NULL  ! IGBP vegetation type
+    real, allocatable  :: nest_veg_greenness_grid(:,:)      _NULL  ! NESDIS vegetation greenness; netCDF file has monthly values
+
+    ! Orography variables
+    real, allocatable  :: nest_slope_type_grid(:,:)         _NULL  ! legacy 1 degree GFS slope type
+
+    ! Albedo variables
+    real, allocatable  :: nest_max_snow_alb_grid(:,:)       _NULL  ! max snow albedo
+    real, allocatable  :: nest_facsf_grid(:,:)              _NULL  ! fractional coverage with strong cosz dependency
+    real, allocatable  :: nest_facwf_grid(:,:)              _NULL  ! fractional coverage with weak cosz dependency
+
+    ! Snow free albedo
+    real, allocatable  :: nest_alvsf_grid(:,:)              _NULL  ! Visible black sky albedo; netCDF file has monthly values
+    real, allocatable  :: nest_alvwf_grid(:,:)              _NULL  ! Visible white sky albedo; netCDF file has monthly values
+    real, allocatable  :: nest_alnsf_grid(:,:)              _NULL  ! Near IR black sky albedo; netCDF file has monthly values
+    real, allocatable  :: nest_alnwf_grid(:,:)              _NULL  ! Near IR white sky albedo; netCDF file has monthly values
 
   end type mn_surface_grids
 
@@ -209,6 +250,7 @@ module fv_moving_nest_types_mod
     real (kind=kind_phys), _ALLOCATABLE :: qrain (:,:)      _NULL   !< sensible heat flux due to rainfall for NSSTM
 
  ! NOAH MP LSM Variables
+    real (kind=kind_phys), _ALLOCATABLE :: soilcolor (:,:)     _NULL   !< soil color
     real (kind=kind_phys), _ALLOCATABLE :: snowxy (:,:)     _NULL   !< number of snow layers
     real (kind=kind_phys), _ALLOCATABLE :: tvxy (:,:)       _NULL   !< canopy temperature
     real (kind=kind_phys), _ALLOCATABLE :: tgxy (:,:)       _NULL   !< ground temperature
@@ -483,6 +525,7 @@ contains
     end if
 
     if (move_noahmp) then
+      allocate ( mn_phys%soilcolor(isd:ied, jsd:jed) )
       allocate ( mn_phys%snowxy(isd:ied, jsd:jed) )
       allocate ( mn_phys%tvxy(isd:ied, jsd:jed) )
       allocate ( mn_phys%tgxy(isd:ied, jsd:jed) )
@@ -609,6 +652,7 @@ contains
 
 
     if (move_noahmp) then
+      mn_phys%soilcolor = +99999.9
       mn_phys%snowxy = +99999.9
       mn_phys%tvxy = +99999.9
       mn_phys%tgxy = +99999.9
@@ -748,6 +792,7 @@ contains
 
    ! NOAH MP LSM
     if (allocated(mn_phys%snowxy)) then
+      deallocate ( mn_phys%soilcolor )
       deallocate ( mn_phys%snowxy )
       deallocate ( mn_phys%tvxy )
       deallocate ( mn_phys%tgxy )

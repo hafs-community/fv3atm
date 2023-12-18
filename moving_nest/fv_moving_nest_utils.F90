@@ -66,9 +66,11 @@ module fv_moving_nest_utils_mod
 #else
   use IPD_typedefs,      only: kind_phys => IPD_kind_phys
 #endif
-
+#ifdef OVERLOAD_R4
+  use constantsR4_mod,   only: grav
+#else
   use constants_mod,     only: grav
-
+#endif
   use boundary_mod,      only: update_coarse_grid, update_coarse_grid_mpp
   use bounding_box_mod,  only: bbox, bbox_get_C2F_index, fill_bbox
   use fms2_io_mod,       only: read_data, write_data, open_file, close_file, register_axis, register_field
@@ -526,8 +528,8 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position
-    real*4, allocatable, intent(in)             :: mask_var(:,:)
-    real*4, allocatable, intent(in)             :: parent_mask_var(:,:)
+    real, allocatable, intent(in)               :: mask_var(:,:)
+    real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
 
@@ -587,8 +589,8 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position
-    real*4, allocatable, intent(in)             :: mask_var(:,:)
-    real*4, allocatable, intent(in)             :: parent_mask_var(:,:)
+    real, allocatable, intent(in)             :: mask_var(:,:)
+    real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real, allocatable, intent(in)               :: default_grid(:,:)
 
@@ -651,8 +653,8 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position, low_z, high_z
-    real*4, allocatable, intent(in)             :: mask_var(:,:)
-    real*4, allocatable, intent(in)             :: parent_mask_var(:,:)
+    real, allocatable, intent(in)             :: mask_var(:,:)
+    real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
 
@@ -676,8 +678,8 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position, low_z, high_z
-    real*4, allocatable, intent(in)             :: mask_var(:,:)
-    real*4, allocatable, intent(in)             :: parent_mask_var(:,:)
+    real, allocatable, intent(in)             :: mask_var(:,:)
+    real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val(low_z:high_z)
 
@@ -738,8 +740,8 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position, low_z, high_z
-    real*4, allocatable, intent(in)             :: mask_var(:,:)
-    real*4, allocatable, intent(in)             :: parent_mask_var(:,:)
+    real, allocatable, intent(in)             :: mask_var(:,:)
+    real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real, allocatable, intent(in)               :: default_grid(:,:)
 
@@ -2338,6 +2340,7 @@ contains
 
 !          print '("[INFO] MASK2D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
 
+          !if (this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK2D SNOWXY npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
 
 
           ! Note that weights don't seem to always be exactly 0.0 when the corner points are aligned
@@ -2346,8 +2349,8 @@ contains
             num_weights = num_weights + 1
             x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
             tw = tw + wt(i,j,1)
-
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
+            
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
 
           endif
 
@@ -2356,7 +2359,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
             tw = tw + wt(i,j,2)
 
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
           endif
 
           if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
@@ -2364,7 +2367,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
             tw = tw + wt(i,j,3)
 
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
           endif
 
           if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
@@ -2372,7 +2375,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
             tw = tw + wt(i,j,4)
 
- !           if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
 
           endif
 
@@ -2386,7 +2389,7 @@ contains
             x(i,j) = default_val
           endif
 
-!          if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
+          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_const npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
 
 
         enddo
@@ -2493,7 +2496,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
             tw = tw + wt(i,j,1)
 
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
 
           endif
 
@@ -2502,7 +2505,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
             tw = tw + wt(i,j,2)
 
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
           endif
 
           if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
@@ -2510,7 +2513,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
             tw = tw + wt(i,j,3)
 
-!            if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
           endif
 
           if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
@@ -2518,7 +2521,7 @@ contains
             x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
             tw = tw + wt(i,j,4)
 
- !           if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
+            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
 
           endif
 
@@ -2532,7 +2535,7 @@ contains
             x(i,j) = default_grid(i,j)
           endif
 
-!          if ( this_pe .eq. 72 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
+          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_2d npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
 
 
         enddo

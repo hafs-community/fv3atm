@@ -72,7 +72,11 @@ module fv_moving_nest_mod
 
   use boundary_mod,           only: update_coarse_grid, update_coarse_grid_mpp
   use bounding_box_mod,       only: bbox, bbox_get_C2F_index, fill_bbox
+#ifdef OVERLOAD_R4
+  use constantsR4_mod,        only: cp_air, omega, rdgas, grav, rvgas, kappa, pstd_mks, hlv
+#else
   use constants_mod,          only: cp_air, omega, rdgas, grav, rvgas, kappa, pstd_mks, hlv
+#endif
   use field_manager_mod,      only: MODEL_ATMOS
   use fv_arrays_mod,          only: fv_atmos_type, fv_nest_type, fv_grid_type, R_GRID
   use fv_arrays_mod,          only: allocate_fv_nest_bc_type, deallocate_fv_nest_bc_type
@@ -814,7 +818,7 @@ contains
     real, allocatable, intent(out)     :: orog_grid(:,:)     !< Output orography grid
     real, allocatable, intent(out)     :: orog_std_grid(:,:) !< Output orography standard deviation grid
     real, allocatable, intent(out)     :: ls_mask_grid(:,:)  !< Output land sea mask grid
-    real, allocatable, intent(out)     :: land_frac_grid(:,:)!< Output land fraction grid
+    real(kind=kind_phys), allocatable, intent(out)     :: land_frac_grid(:,:)!< Output land fraction grid
     integer, intent(in)                :: parent_tile        !< Parent tile number
 
     integer :: nx_cubic, nx, ny, fp_nx, fp_ny, mid_nx, mid_ny
