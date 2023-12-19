@@ -1169,9 +1169,10 @@ contains
 
       ! Soil color.  Default is set to sandy soil/desert 1, which seems appropriate for isolated islands
       !  Reference: https://www.jsg.utexas.edu/noah-mp/files/Users_Guide_v0.pdf
+      !  Default changed to 10 based on suggestion from Mike Barlage; more middle of the spectrum value.
       call fill_nest_halos_from_parent_masked("soilcol", mn_phys%soilcolor, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls_mask_grid, M_LAND, 1.0D0)
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls_mask_grid, M_LAND, 10.0D0)
 
       call fill_nest_halos_from_parent_masked("snowxy", mn_phys%snowxy, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &

@@ -1629,7 +1629,8 @@ contains
                 
                 if (Moving_nest(n)%mn_phys%soilcolor(i,j) .lt. 1.0 .or. Moving_nest(n)%mn_phys%soilcolor(i,j) .gt. 19.0 ) then
                   print '("[INFO] WDR NOAHMP reset soilcolor values npe=",I0," i=",I0," j=",I0," soilcolor=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%soilcolor(i,j)
-                  Moving_nest(n)%mn_phys%soilcolor(i,j) = 1.0  ! Default sand/desert bright color
+                  !  Default changed to 10 based on suggestion from Mike Barlage; more middle of the spectrum value.
+                  Moving_nest(n)%mn_phys%soilcolor(i,j) = 10.0 
                 endif
                 
                 if (Moving_nest(n)%mn_phys%alboldxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%alboldxy(i,j) .gt. 1.0 ) then
