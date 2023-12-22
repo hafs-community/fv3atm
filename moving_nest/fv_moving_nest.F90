@@ -87,7 +87,7 @@ module fv_moving_nest_mod
   use fv_nwp_nudge_mod,       only: do_adiabatic_init
   use init_hydro_mod,         only: p_var
   use tracer_manager_mod,     only: get_tracer_index, get_tracer_names
-  use fv_moving_nest_types_mod, only: fv_moving_nest_prog_type, fv_moving_nest_physics_type, Moving_nest
+  use fv_moving_nest_types_mod, only: fv_moving_nest_prog_type, fv_moving_nest_physics_type, Moving_nest, mn_land_mask_grids, mn_fix_grids, alloc_set_facwf
   use fv_moving_nest_utils_mod,  only: alloc_halo_buffer, load_nest_latlons_from_nc, grid_geometry, output_grid_to_nc
   use fv_moving_nest_utils_mod,  only: fill_nest_from_buffer, fill_nest_from_buffer_cell_center, fill_nest_from_buffer_nearest_neighbor
   use fv_moving_nest_utils_mod,  only: fill_nest_halos_from_parent, fill_grid_from_supergrid, fill_weight_grid
@@ -859,6 +859,110 @@ contains
     call alloc_read_data(nc_filename, 'land_frac', fp_nx, fp_ny, land_frac_grid, pelist)  ! TODO validate if this is needed
 
   end subroutine mn_orog_read_hires_parent
+
+  !>@brief The subroutine 'mn_replace_low_values' replaces low values with a default value.
+  subroutine mn_replace_low_values(data_grid, low_value, new_value)
+    real, _ALLOCATABLE, intent(inout)   :: data_grid(:,:)  !< 2D grid of data
+    real, intent(in)                    :: low_value       !< Low value to check for; e.g. negative or fill value
+    real, intent(in)                    :: new_value       !< Value to replace low value with
+
+    integer :: i, j
+
+    do i=lbound(data_grid,1),ubound(data_grid,1)
+      do j=lbound(data_grid,2),ubound(data_grid,2)
+        if (data_grid(i,j) .le. low_value) data_grid(i,j) = new_value
+      enddo
+    enddo
+  end subroutine mn_replace_low_values
+
+  subroutine mn_static_read_ls(static_ls, npx, npy, refine, pelist, surface_dir, tile_num, terrain_smoother, filtered_terrain)
+    type(mn_land_mask_grids), intent(inout) :: static_ls
+    integer, intent(in) :: npx, npy, refine, tile_num      !< Number of x,y points and nest refinement, (parent) tile number 
+    integer, allocatable, intent(in)   :: pelist(:)        !< PE list for fms2_io 
+    character(len=*), intent(in)       :: surface_dir      !< Surface directory 
+    integer, intent(in) :: terrain_smoother
+    logical, intent(in) :: filtered_terrain
+
+    ! If terrain_smoother method 1 is chosen, we need the parent coarse terrain
+    if (terrain_smoother .eq. 1) then
+      if (filtered_terrain) then
+        call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "orog_filt", static_ls%orog_grid,  tile_num)
+      else
+        call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "orog_raw", static_ls%orog_grid,  tile_num)
+      endif
+    endif
+
+    ! Read in coarse resolution land sea mask to use for masked interpolations; factor in lakes as well
+    call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "slmsk", static_ls%ls_mask_grid,  tile_num)
+    call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "land_frac", static_ls%land_frac_grid,  tile_num)
+
+    !! Lat lons for debugging
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "oro_data", "geolat", static_ls%geolat_grid,  tile_num)
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "oro_data", "geolon", static_ls%geolon_grid,  tile_num)
+
+    ! Need parent soil type to determine lakes
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "soil_type", "soil_type", static_ls%soil_type_grid,  tile_num)
+    ! To match initialization behavior, set any -999s to 0 in soil_type
+    call mn_replace_low_values(static_ls%soil_type_grid, -100.0, 0.0)
+
+  end subroutine mn_static_read_ls
+
+  subroutine mn_static_read_fix(static_fix, npx, npy, refine, pelist, surface_dir, tile_num, month)
+    type(mn_fix_grids), intent(inout) :: static_fix
+    integer, allocatable, intent(in)   :: pelist(:)              !< PE list for fms2_io 
+    character(len=*), intent(in)       :: surface_dir            !< Surface directory 
+    integer, intent(in) :: npx, npy, refine, tile_num, month     !< Number of x,y points and nest refinement, (parent) tile number 
+
+    call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "substrate_temperature", "substrate_temperature", static_fix%deep_soil_temp_grid, tile_num)
+    ! set any -999s to +4C
+    call mn_replace_low_values(static_fix%deep_soil_temp_grid, -100.0, 277.0)
+
+
+    !! TODO investigate reading high-resolution veg_frac and veg_greenness
+    !call mn_static_read_hires(npx, npy, refine, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "", mn_static%veg_frac_grid)
+
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "vegetation_type", "vegetation_type", static_fix%veg_type_grid,  tile_num)
+    ! To match initialization behavior, set any -999s to 0 in veg_type
+    call mn_replace_low_values(static_fix%veg_type_grid, -100.0, 0.0)
+
+
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "slope_type", "slope_type", static_fix%slope_type_grid,  tile_num)
+    ! To match initialization behavior, set any -999s to 0 in slope_type
+    call mn_replace_low_values(static_fix%slope_type_grid, -100.0, 0.0)
+
+
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "maximum_snow_albedo", "maximum_snow_albedo", static_fix%max_snow_alb_grid,  tile_num)
+    ! Set any -999s to 0.5
+    call mn_replace_low_values(static_fix%max_snow_alb_grid, -100.0, 0.5)
+
+    ! Albedo fraction -- read and calculate
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "facsf", "facsf", static_fix%facsf_grid,  tile_num)
+
+    call alloc_set_facwf(static_fix)
+
+    ! Additional albedo variables
+    !  black sky = strong cosz -- direct sunlight
+    !  white sky = weak cosz -- diffuse light
+
+    ! alvsf = visible strong cosz = visible_black_sky_albedo
+    ! alvwf = visible weak cosz = visible_white_sky_albedo
+    ! alnsf = near IR strong cosz = near_IR_black_sky_albedo
+    ! alnwf = near IR weak cosz = near_IR_white_sky_albedo
+
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "visible_black_sky_albedo", static_fix%alvsf_grid,  tile_num, time=month)
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "visible_white_sky_albedo", static_fix%alvwf_grid,  tile_num, time=month)
+
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "near_IR_black_sky_albedo", static_fix%alnsf_grid,  tile_num, time=month)
+    call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "near_IR_white_sky_albedo", static_fix%alnwf_grid,  tile_num, time=month)
+
+    ! Set the -999s to small value of 0.06, matching initialization code in chgres
+
+    call mn_replace_low_values(static_fix%alvsf_grid, -100.0, 0.06)
+    call mn_replace_low_values(static_fix%alvwf_grid, -100.0, 0.06)
+    call mn_replace_low_values(static_fix%alnsf_grid, -100.0, 0.06)
+    call mn_replace_low_values(static_fix%alnwf_grid, -100.0, 0.06)
+
+  end subroutine mn_static_read_fix
 
   !>@brief The subroutine 'mn_static_read_hires_r4' loads high resolution data from netCDF
   !>@details Gathers a single variable from the netCDF file
