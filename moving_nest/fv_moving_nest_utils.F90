@@ -2349,7 +2349,7 @@ contains
             num_weights = num_weights + 1
             x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
             tw = tw + wt(i,j,1)
-            
+
             !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
 
           endif

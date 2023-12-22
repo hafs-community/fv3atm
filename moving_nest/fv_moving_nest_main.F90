@@ -109,7 +109,7 @@ module fv_moving_nest_main_mod
   use fv_moving_nest_types_mod, only: mn_apply_lakes, mn_overwrite_with_nest_init_values, alloc_set_facwf
   use fv_moving_nest_types_mod, only: mn_static_overwrite_ls_from_nest, mn_static_overwrite_fix_from_nest
   use fv_moving_nest_types_mod, only: deallocate_land_mask_grids, deallocate_fix_grids
-  
+
   !      Prognostic variable routines
   use fv_moving_nest_mod,         only: mn_prog_fill_intern_nest_halos, mn_prog_fill_nest_halos_from_parent, &
       mn_prog_dump_to_netcdf, mn_prog_shift_data
@@ -261,7 +261,7 @@ contains
     type(IPD_data_type), intent(in)      :: IPD_data(:)   !< Physics variable data
     type(time_type), intent(in)          :: time_step     !< Current timestep
     integer, intent(in)                  :: parent_grid_num, child_grid_num
-    
+
 
     character(len=160)  :: line
     character(len=1)    :: mask_char
@@ -297,23 +297,23 @@ contains
         endif
       enddo
       !print '("[INFO] WDR oro npe=",I0," time=",I0," i=",I0," ",A80)',this_pe,a_step,i,trim(line)
-      
+
     enddo
-    
-    
+
+
     local_slmsk = 8
     !print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
-    
+
     do nb = 1,Atm_block%nblks
       blen = Atm_block%blksz(nb)
       do ix = 1, blen
         i_pe = Atm_block%index(nb)%ii(ix)
         j_pe = Atm_block%index(nb)%jj(ix)
-        
+
         !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
-        
+
         local_slmsk(i_pe, j_pe) = IPD_data(nb)%Sfcprop%slmsk(ix)
-        
+
         if (allocated(Moving_nest)) then
           if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
             if (int(local_slmsk(i_pe,j_pe)) .ne. 8) then
@@ -333,23 +333,23 @@ contains
         endif
       enddo
     enddo
-    
+
     print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2)
-    
+
     line = ""
     do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
       write(num_char, "(I1)"), mod(j,10)
       line = trim(line) // trim(num_char)
     enddo
     print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60)',this_pe,a_step,-99,trim(line)
-    
+
     do i=lbound(local_slmsk,1), ubound(local_slmsk,1)
       line = ""
       num_land = 0
       num_water = 0
 
       do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
-        
+
         if (local_slmsk(i,j) .eq. 1) then
           ! land
           line = trim(line) // "+"
@@ -374,11 +374,11 @@ contains
       print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60," ",I2," ",I2)',this_pe,a_step,i,trim(line), num_land, num_water
     enddo
   end subroutine log_landsea_mask
-  
-  
+
+
   subroutine validate_geo_coords(tag, geo_grid, nest_geo_grid, refine, ioffset, joffset)
     character(len=*)                     :: tag
-    real(kind=kind_phys), allocatable, intent(in)  :: geo_grid(:,:) 
+    real(kind=kind_phys), allocatable, intent(in)  :: geo_grid(:,:)
     real(kind=kind_phys), allocatable, intent(in)  :: nest_geo_grid(:,:)
     integer, intent(in) :: refine, ioffset, joffset
 
@@ -395,7 +395,7 @@ contains
 
       enddo
     enddo
-      
+
   end subroutine validate_geo_coords
 
 
@@ -407,7 +407,7 @@ contains
     type(IPD_data_type), intent(in)      :: IPD_data(:)   !< Physics variable data
     integer, intent(in)                  :: parent_grid_num, child_grid_num
 
-    
+
     character(len=160)  :: line
     character(len=1)    :: mask_char
     character(len=1)    :: num_char
@@ -427,17 +427,17 @@ contains
 
     local_slmsk = 8
     print '("[INFO] WDR VALIDATE local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
-    
+
     do nb = 1,Atm_block%nblks
       blen = Atm_block%blksz(nb)
       do ix = 1, blen
         i_pe = Atm_block%index(nb)%ii(ix)
         j_pe = Atm_block%index(nb)%jj(ix)
-        
+
         !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
-        
+
         local_slmsk(i_pe, j_pe) = IPD_data(nb)%Sfcprop%slmsk(ix)
-        
+
         if (allocated(Moving_nest)) then
           if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
             !print '("[INFO] WDR VALIDATE local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
@@ -820,10 +820,10 @@ contains
     this_pe = mpp_pe()
 
     ! Highest satellite observed skin temperatures on Earth are on the order of +70C/343K/+160F
-    ! Mildrexler, D. J., M. Zhao, and S. W. Running, 2011: Satellite Finds Highest Land Skin Temperatures on Earth. Bull. Amer. Meteor. Soc., 92, 855–860, 
+    ! Mildrexler, D. J., M. Zhao, and S. W. Running, 2011: Satellite Finds Highest Land Skin Temperatures on Earth. Bull. Amer. Meteor. Soc., 92, 855–860,
     !    https://doi.org/10.1175/2011BAMS3067.1.
     ! https://journals.ametsoc.org/view/journals/bams/92/7/2011bams3067_1.xml?tab_body=pdf
-    
+
     maxSkinTempK = 273.15 + 80.0
 
     use_timers = Atm(n)%flagstruct%fv_timers
@@ -1037,7 +1037,7 @@ contains
           call mn_phys_set_slmsk(Atm, n, mn_static, ioffset, joffset, x_refine)
 
           ! Read in full panel fix data
-          call mn_static_read_fix(mn_static%fp_fix, Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, month) 
+          call mn_static_read_fix(mn_static%fp_fix, Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, month)
           ! Read in nest fix data
           call mn_static_read_fix(mn_static%nest_fix, Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, month)
 
@@ -1301,24 +1301,24 @@ contains
         !print '("[INFO] WDR NOAHMP reset negative values npe=",I0)', mpp_pe()
         !          do i=isd,ied
         !            do j=jsd,jed
-        
+
         !  This just needs to check in the compute domain.  While the mn_phys fields extend into the halo, the IPD structure from CCPP only covers the compute domain.
         do i=isc,iec
           do j=jsc,jec
-            
+
             ! Regular physics variables
             do k=lbound(Moving_nest(n)%mn_phys%stc,3),ubound(Moving_nest(n)%mn_phys%stc,3)
               if (Moving_nest(n)%mn_phys%stc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%stc(i,j,k) .gt. maxSkinTempK ) then
                 print '("[INFO] WDR NOAHMP reset soil temp values npe=",I0," i=",I0," j=",I0," stc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%stc(i,j,k)
-                Moving_nest(n)%mn_phys%stc(i,j,k) = 298.0 
+                Moving_nest(n)%mn_phys%stc(i,j,k) = 298.0
               endif
               if (Moving_nest(n)%mn_phys%smc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%smc(i,j,k) .gt.  1000.0 ) then
                 print '("[INFO] WDR NOAHMP reset soil moisture values npe=",I0," i=",I0," j=",I0," smc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%smc(i,j,k)
-                Moving_nest(n)%mn_phys%smc(i,j,k) = 0.3 
+                Moving_nest(n)%mn_phys%smc(i,j,k) = 0.3
               endif
               if (Moving_nest(n)%mn_phys%slc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%slc(i,j,k) .gt.  1000.0 ) then
                 print '("[INFO] WDR NOAHMP reset soil liquid values npe=",I0," i=",I0," j=",I0," slc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%slc(i,j,k)
-                Moving_nest(n)%mn_phys%slc(i,j,k) = 0.3 
+                Moving_nest(n)%mn_phys%slc(i,j,k) = 0.3
               endif
             enddo
 
@@ -1336,13 +1336,13 @@ contains
 
 
             if (move_noahmp) then
-              
+
               !! Patch to reset slmsk
               !if (Moving_nest(n)%mn_phys%slmsk(i,j) .eq. 1 .and. Moving_nest(n)%mn_phys%tgxy(i,j) .gt. 1e+10) then
               !  print '("[INFO] WDR NOAHMP reset land to water for lake npe=",I0," i=",I0," j=",I0," tgxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tgxy(i,j)
               !  Moving_nest(n)%mn_phys%slmsk(i,j) = 0
               !endif
-              
+
               ! slmsk(:,:)   !< land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
 
               !if (this_pe .eq. 89) then
@@ -1350,7 +1350,7 @@ contains
               !  print '("[INFO] WDR NOAHMP debug npe=",I0," i=",I0," j=",I0," tsfc=",E12.5," tsfcl=",E12.5," tsfco=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tsfc(i,j), Moving_nest(n)%mn_phys%tsfcl(i,j), Moving_nest(n)%mn_phys%tsfco(i,j)
               !endif
 
-              
+
               if (Moving_nest(n)%mn_phys%slmsk(i,j) .eq. 1) then
                 ! NOAH MP Variables
                 ! This is normally a negative number
@@ -1362,40 +1362,40 @@ contains
                 do k=lbound(Moving_nest(n)%mn_phys%hprime,3),ubound(Moving_nest(n)%mn_phys%hprime,3)
                   print '("[INFO] WDR NOAHMP reset show hprime values npe=",I0," i=",I0," j=",I0," k=",I0," hprime=",E12.5)', mpp_pe(), i, j, k, Moving_nest(n)%mn_phys%hprime(i,j,k)
                 enddo
-                
+
 
                   Moving_nest(n)%mn_phys%snowxy(i,j) = 0.0
                 endif
-                
+
                 if (Moving_nest(n)%mn_phys%soilcolor(i,j) .lt. 1.0 .or. Moving_nest(n)%mn_phys%soilcolor(i,j) .gt. 19.0 ) then
                   print '("[INFO] WDR NOAHMP reset soilcolor values npe=",I0," i=",I0," j=",I0," soilcolor=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%soilcolor(i,j)
                   !  Default changed to 10 based on suggestion from Mike Barlage; more middle of the spectrum value.
-                  Moving_nest(n)%mn_phys%soilcolor(i,j) = 10.0 
+                  Moving_nest(n)%mn_phys%soilcolor(i,j) = 10.0
                 endif
-                
+
                 if (Moving_nest(n)%mn_phys%alboldxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%alboldxy(i,j) .gt. 1.0 ) then
                   print '("[INFO] WDR NOAHMP reset old albedo alboldxy values npe=",I0," i=",I0," j=",I0," alboldxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%alboldxy(i,j)
                   Moving_nest(n)%mn_phys%alboldxy(i,j) = 0.65  ! Cold start value
                 endif
-                
+
                 do k=lbound(Moving_nest(n)%mn_phys%snicexy,3),ubound(Moving_nest(n)%mn_phys%snicexy,3)
                   if (Moving_nest(n)%mn_phys%snicexy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snicexy(i,j,k) .gt. 100.0 ) then
                     print '("[INFO] WDR NOAHMP reset ice thickness values npe=",I0," a_step=",I0," i=",I0," j=",I0," k=",I0," lat,lon=",F9.5,",",F10.5," snicexy=",E12.5," lsnow=",I0,"-",I0)', mpp_pe(), a_step, i, j, k, Atm(n)%gridstruct%agrid(i,j,2)*rad2deg, Atm(n)%gridstruct%agrid(i,j,1)*rad2deg - 360.0, Moving_nest(n)%mn_phys%snicexy(i,j,k), IPD_Control%lsnow_lsm_lbound, IPD_Control%lsnow_lsm_ubound
-                    
+
                     !print '("[INFO] WDR NOAHMP snicexy reset ice thickness values npe=",I0," isd-ied=",I0,"-",I0," jsd-jed",I0,"-",I0," k=",I0,"-",I0)', mpp_pe(), isd, ied, jsd, jed, lbound(Moving_nest(n)%mn_phys%snicexy,3), ubound(Moving_nest(n)%mn_phys%snicexy,3)
-                    
-                    
+
+
                     Moving_nest(n)%mn_phys%snicexy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-                
+
                 do k=lbound(Moving_nest(n)%mn_phys%snliqxy,3),ubound(Moving_nest(n)%mn_phys%snliqxy,3)
                   if (Moving_nest(n)%mn_phys%snliqxy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snliqxy(i,j,k) .gt. 100.0 ) then
                     print '("[INFO] WDR NOAHMP reset liq thickness values npe=",I0," i=",I0," j=",I0," snliqxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snliqxy(i,j,k)
                     Moving_nest(n)%mn_phys%snliqxy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-                
+
                 ! (/0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0/) -- 3 snow levels, 4 soil levels
                 do k=lbound(Moving_nest(n)%mn_phys%zsnsoxy,3),ubound(Moving_nest(n)%mn_phys%zsnsoxy,3)
                   if (Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) .lt. -80.0 .or. Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) .gt. 100.0 ) then
@@ -1404,40 +1404,40 @@ contains
                     Moving_nest(n)%mn_phys%zsnsoxy(i,j,k) = zsns_default(k)  ! Cold start value
                   endif
                 enddo
-                
+
                 if (Moving_nest(n)%mn_phys%snowd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%snowd(i,j) .gt. 1000.0 ) then
                   print '("[INFO] WDR NOAHMP reset snow thickness values npe=",I0," i=",I0," j=",I0," snowd=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%snowd(i,j)
                   Moving_nest(n)%mn_phys%snowd(i,j) = 0.0  ! Cold start value
                 endif
-                
+
                 if (Moving_nest(n)%mn_phys%weasd(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%weasd(i,j) .gt. 1000.0 ) then
                   print '("[INFO] WDR NOAHMP reset snow thickness values npe=",I0," i=",I0," j=",I0," weasd=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%weasd(i,j)
                   Moving_nest(n)%mn_phys%weasd(i,j) = 0.0  ! Cold start value
                 endif
-                
+
                 do k=lbound(Moving_nest(n)%mn_phys%tsnoxy,3),ubound(Moving_nest(n)%mn_phys%tsnoxy,3)
                   if (Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tsnoxy(i,j,k) .gt. maxSkinTempK ) then
                     print '("[INFO] WDR NOAHMP reset snow temp values npe=",I0," i=",I0," j=",I0," tsnoxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tsnoxy(i,j,k)
                     Moving_nest(n)%mn_phys%tsnoxy(i,j,k) = 0.0  ! Cold start value
                   endif
                 enddo
-                
+
                 if (Moving_nest(n)%mn_phys%tvxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tvxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset vegetation canopy temp values npe=",I0," i=",I0," j=",I0," tvxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tvxy(i,j)
                   Moving_nest(n)%mn_phys%tvxy(i,j) = 298.0  ! skin temperature
                 endif
-                
+
                 if (Moving_nest(n)%mn_phys%tgxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tgxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset ground temp values npe=",I0," i=",I0," j=",I0," tgxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tgxy(i,j)
                   Moving_nest(n)%mn_phys%tgxy(i,j) = 298.0  ! skin temperature
                 endif
-                
+
                 if (Moving_nest(n)%mn_phys%tahxy(i,j) .lt. 0.0 .or. Moving_nest(n)%mn_phys%tahxy(i,j) .gt. maxSkinTempK ) then
                   print '("[INFO] WDR NOAHMP reset air temp in canopy values npe=",I0," i=",I0," j=",I0," tahxy=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%tahxy(i,j)
                   Moving_nest(n)%mn_phys%tahxy(i,j) = 298.0  ! skin temperature
                 endif
-                
-                
+
+
                 do k=lbound(Moving_nest(n)%mn_phys%stc,3),ubound(Moving_nest(n)%mn_phys%stc,3)
                   if (Moving_nest(n)%mn_phys%stc(i,j,k) .lt. 0.0 .or. Moving_nest(n)%mn_phys%stc(i,j,k) .gt. maxSkinTempK ) then
                     print '("[INFO] WDR NOAHMP reset air temp in canopy values npe=",I0," i=",I0," j=",I0," stc=",E12.5)', mpp_pe(), i, j, Moving_nest(n)%mn_phys%stc(i,j,k)
@@ -1472,8 +1472,8 @@ contains
           enddo      ! do j
         enddo        ! do i
       endif          ! if is_fine_pe
-      
-      
+
+
       if (is_fine_pe) then
         do i=isc,iec
           do j=jsc,jec

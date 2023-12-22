@@ -86,8 +86,8 @@ module fv_moving_nest_types_mod
     real(kind=kind_phys), allocatable  :: land_frac_grid(:,:)          _NULL  ! Continuous land fraction - 0.0 ocean, 0.5 half of each, 1.0 all land
 
     !     raw or filtered depending on namelist option,in meters
-    real(kind=kind_phys), allocatable  :: geolat_grid(:,:)          _NULL 
-    real(kind=kind_phys), allocatable  :: geolon_grid(:,:)          _NULL 
+    real(kind=kind_phys), allocatable  :: geolat_grid(:,:)          _NULL
+    real(kind=kind_phys), allocatable  :: geolon_grid(:,:)          _NULL
   end type mn_land_mask_grids
 
 
@@ -428,7 +428,7 @@ contains
 
   subroutine mn_overwrite_with_nest_init_values_r8(tag, var_grid, nest_var_grid, refine, ioffset, joffset)
     character(len=*)                     :: tag
-    real*8, allocatable, intent(inout)   :: var_grid(:,:) 
+    real*8, allocatable, intent(inout)   :: var_grid(:,:)
     real*8, allocatable, intent(in)      :: nest_var_grid(:,:)
 
     integer, intent(in) :: refine, ioffset, joffset
@@ -446,7 +446,7 @@ contains
 
   subroutine mn_overwrite_with_nest_init_values_r4(tag, var_grid, nest_var_grid, refine, ioffset, joffset)
     character(len=*)                     :: tag
-    real*4, allocatable, intent(inout)   :: var_grid(:,:) 
+    real*4, allocatable, intent(inout)   :: var_grid(:,:)
     real*4, allocatable, intent(in)      :: nest_var_grid(:,:)
 
     integer, intent(in) :: refine, ioffset, joffset
@@ -503,7 +503,7 @@ contains
     type(mn_land_mask_grids), intent(inout) :: fp_ls
     type(mn_land_mask_grids), intent(in)    :: nest_ls
     integer, intent(in)                     :: refine, ioffset, joffset
-          
+
     ! Update full panel with nest init values (there are a few mismatches)
     ! TODO maybe add orog_raw/orog_filt
     call mn_overwrite_with_nest_init_values("ls_mask", fp_ls%ls_mask_grid, nest_ls%ls_mask_grid, refine, ioffset, joffset)
@@ -511,10 +511,10 @@ contains
     !if (is_fine_pe) then
     !  call validate_navigation_fields("INIT", Atm_block, IPD_control, IPD_data, parent_grid_num, child_grid_num)
     !endif
-    
+
     call mn_overwrite_with_nest_init_values("soil_type", fp_ls%soil_type_grid, nest_ls%soil_type_grid, refine, ioffset, joffset)
     call mn_overwrite_with_nest_init_values("land_frac", fp_ls%land_frac_grid, nest_ls%land_frac_grid, refine, ioffset, joffset)
-    
+
   end subroutine mn_static_overwrite_ls_from_nest
 
   subroutine mn_static_overwrite_fix_from_nest(fp_fix, nest_fix, refine, ioffset, joffset)

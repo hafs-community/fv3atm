@@ -877,9 +877,9 @@ contains
 
   subroutine mn_static_read_ls(static_ls, npx, npy, refine, pelist, surface_dir, tile_num, terrain_smoother, filtered_terrain)
     type(mn_land_mask_grids), intent(inout) :: static_ls
-    integer, intent(in) :: npx, npy, refine, tile_num      !< Number of x,y points and nest refinement, (parent) tile number 
-    integer, allocatable, intent(in)   :: pelist(:)        !< PE list for fms2_io 
-    character(len=*), intent(in)       :: surface_dir      !< Surface directory 
+    integer, intent(in) :: npx, npy, refine, tile_num      !< Number of x,y points and nest refinement, (parent) tile number
+    integer, allocatable, intent(in)   :: pelist(:)        !< PE list for fms2_io
+    character(len=*), intent(in)       :: surface_dir      !< Surface directory
     integer, intent(in) :: terrain_smoother
     logical, intent(in) :: filtered_terrain
 
@@ -909,9 +909,9 @@ contains
 
   subroutine mn_static_read_fix(static_fix, npx, npy, refine, pelist, surface_dir, tile_num, month)
     type(mn_fix_grids), intent(inout) :: static_fix
-    integer, allocatable, intent(in)   :: pelist(:)              !< PE list for fms2_io 
-    character(len=*), intent(in)       :: surface_dir            !< Surface directory 
-    integer, intent(in) :: npx, npy, refine, tile_num, month     !< Number of x,y points and nest refinement, (parent) tile number 
+    integer, allocatable, intent(in)   :: pelist(:)              !< PE list for fms2_io
+    character(len=*), intent(in)       :: surface_dir            !< Surface directory
+    integer, intent(in) :: npx, npy, refine, tile_num, month     !< Number of x,y points and nest refinement, (parent) tile number
 
     call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "substrate_temperature", "substrate_temperature", static_fix%deep_soil_temp_grid, tile_num)
     ! set any -999s to +4C

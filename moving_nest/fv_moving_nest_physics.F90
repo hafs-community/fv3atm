@@ -534,7 +534,7 @@ contains
           mn_phys%soilcolor(i,j)  = IPD_Data(nb)%Sfcprop%scolor(ix)
           mn_phys%snowxy(i,j)     = IPD_Data(nb)%Sfcprop%snowxy(ix)
           !if (i .eq. 149 .and. j .eq. 169) print '("[INFO] WDR SNOWXY MASK2D npe=",I0," i=",I0," j=",I0," snowxy=",E10.5)', this_pe, i, j, mn_phys%snowxy(i,j)
-          
+
 
           mn_phys%tvxy(i,j)       = IPD_Data(nb)%Sfcprop%tvxy(ix)
           mn_phys%tgxy(i,j)       = IPD_Data(nb)%Sfcprop%tgxy(ix)
