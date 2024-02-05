@@ -10,9 +10,8 @@
   path = ccpp/physics
   #url = https://github.com/ufs-community/ccpp-physics
   #branch = ufs/dev
-  url = https://github.com/RuiyuSun/ccpp-physics
-  branch = feature_gfdlmpv3
-
+  url = https://github.com/hafs-community/ccpp-physics
+  branch = feature/hafsv2_gfdlmpv3
 [submodule "upp"]
   path = upp
 # url = https://github.com/NOAA-EMC/UPP
