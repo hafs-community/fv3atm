@@ -1342,6 +1342,7 @@ module GFS_typedefs
     real(kind=kind_phys) :: elmx            !< maximum allowed dissipation mixing length in boundary layer mass flux scheme
     integer              :: sfc_rlm         !< choice of near surface mixing length in boundary layer mass flux scheme
     integer              :: tc_pbl          !< control for TC applications in the PBL scheme
+    integer              :: newshear        !< choice of using updated shear effects in TKE-EDMF PBL & saSAS CP
 
 !--- parameters for canopy heat storage (CHS) parameterization
     real(kind=kind_phys) :: h0facu          !< CHS factor for sensible heat flux in unstable surface layer
@@ -3853,6 +3854,7 @@ module GFS_typedefs
     real(kind=kind_phys) :: elmx           = 300.            !< maximum allowed dissipation mixing length in boundary layer mass flux scheme
     integer              :: sfc_rlm        = 0               !< choice of near surface mixing length in boundary layer mass flux scheme
     integer              :: tc_pbl         = 0               !< control for TC applications in the PBL scheme
+    integer              :: newshear       = 1               !< choice of using uodated shear effects in TKE-EDMF PBL & saSAS CP
 
 !--- parameters for canopy heat storage (CHS) parameterization
     real(kind=kind_phys) :: h0facu         = 0.25
@@ -4094,7 +4096,7 @@ module GFS_typedefs
                                diag_flux, diag_log,                                         &
                           !    vertical diffusion
                                xkzm_m, xkzm_h, xkzm_s, xkzminv, moninq_fac, dspfac,         &
-                               bl_upfr, bl_dnfr, rlmx, elmx, sfc_rlm, tc_pbl,               &
+                               bl_upfr, bl_dnfr, rlmx, elmx, sfc_rlm, tc_pbl, newshear,     &
                           !--- canopy heat storage parameterization
                                h0facu, h0facs,                                              &
                           !--- cellular automata
@@ -5035,6 +5037,7 @@ module GFS_typedefs
     Model%elmx             = elmx
     Model%sfc_rlm          = sfc_rlm
     Model%tc_pbl           = tc_pbl
+    Model%newshear         = newshear
 
 !--- canopy heat storage parametrization
     Model%h0facu           = h0facu
@@ -6853,6 +6856,7 @@ module GFS_typedefs
       print *, ' elmx              : ', Model%elmx
       print *, ' sfc_rlm           : ', Model%sfc_rlm
       print *, ' tc_pbl            : ', Model%tc_pbl
+      print *, ' newshear          : ', Model%newshear
       print *, ' '
       print *, 'parameters for canopy heat storage parametrization'
       print *, ' h0facu            : ', Model%h0facu
