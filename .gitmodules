@@ -12,5 +12,5 @@
   branch = ufs/dev
 [submodule "upp"]
   path = upp
-  url = https://github.com/hafs-community/UPP
-  branch = production/hafs.v2
+  url = https://github.com/NOAA-EMC/UPP
+  branch = release/hafs_v2
