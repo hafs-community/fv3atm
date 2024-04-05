@@ -576,7 +576,7 @@ contains
 
     endif
 
-    write(message, *) 'eval_move_nest: move_cd_x=', delta_i_c, 'move_cd_y=', delta_j_c, 'do_move=', do_move
+    write(message, *) 'eval_move_nest: a_step=',a_step,' move_cd_x=', delta_i_c, 'move_cd_y=', delta_j_c, 'do_move=', do_move, 'parent_grid_num=', parent_grid_num,   'child_grid_num=', child_grid_num
     call mpp_error(NOTE,message)
 
   end subroutine eval_move_nest
@@ -1108,24 +1108,23 @@ contains
       !!============================================================================
 
       if (take_action) then
-        call mn_prog_shift_data(Atm, n, child_grid_num, wt_h, wt_u, wt_v, &
+        call mn_prog_shift_data(Atm, n, child_grid_num, take_action, wt_h, wt_u, wt_v, &
             delta_i_c, delta_j_c, x_refine, y_refine, &
             is_fine_pe, global_nest_domain, nest_level, nz)
       else
-        call mn_prog_shift_data(Atm, n, child_grid_num, wt_h, wt_u, wt_v, &
+        call mn_prog_shift_data(Atm, n, child_grid_num, take_action, wt_h, wt_u, wt_v, &
             0, 0, x_refine, y_refine, &
             is_fine_pe, global_nest_domain, nest_level, nz)
       endif
 
-
       if (debug_sync) call mpp_sync(full_pelist)   ! Used to make debugging easier.  Can be removed.
 
       if (take_action) then
-        call mn_phys_shift_data(Atm, IPD_control, IPD_data, n, child_grid_num, wt_h, wt_u, wt_v, &
+        call mn_phys_shift_data(Atm, IPD_control, IPD_data, n, child_grid_num, take_action, wt_h, wt_u, wt_v, &
             delta_i_c, delta_j_c, x_refine, y_refine, &
             is_fine_pe, global_nest_domain, nest_level, nz)
       else
-        call mn_phys_shift_data(Atm, IPD_control, IPD_data, n, child_grid_num, wt_h, wt_u, wt_v, &
+        call mn_phys_shift_data(Atm, IPD_control, IPD_data, n, child_grid_num, take_action, wt_h, wt_u, wt_v, &
             0, 0, x_refine, y_refine, &
             is_fine_pe, global_nest_domain, nest_level, nz)
       endif

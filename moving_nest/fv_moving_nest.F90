@@ -1085,11 +1085,13 @@ contains
 
   !>@brief The subroutine 'mn_prog_shift_data' shifts the data on each nest PE
   !>@details Iterates through the prognostic variables
-  subroutine mn_prog_shift_data(Atm, n, child_grid_num, wt_h, wt_u, wt_v, &
+  subroutine mn_prog_shift_data(Atm, n, child_grid_num, take_action, &
+      wt_h, wt_u, wt_v, &
       delta_i_c, delta_j_c, x_refine, y_refine, &
       is_fine_pe, nest_domain, nest_level, nz)
     type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)                                      !< Atm data array
     integer, intent(in)                                      :: n, child_grid_num                           !< Grid numbers
+    logical, intent(in)                                      :: take_action                                 !< Perform move on this nest?
     real, allocatable, intent(in)                            :: wt_h(:,:,:), wt_u(:,:,:), wt_v(:,:,:)       !< Interpolation weights
     integer, intent(in)                                      :: delta_i_c, delta_j_c, x_refine, y_refine    !< Delta i,j, nest refinement
     logical, intent(in)                                      :: is_fine_pe                                  !< Is this is a nest PE?
@@ -1120,42 +1122,42 @@ contains
     endif
 
     call mn_var_shift_data(Atm(n)%q_con, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%pt, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%w, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     !call mn_var_shift_data(Atm(n)%omga, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-    !     delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+    !     delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%delp, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(mn_prog%delz, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     if (Moving_nest(n)%mn_flag%terrain_smoother .eq. 4) then
       call mn_var_shift_data(Atm(n)%phis, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level)
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level)
     endif
 
     call mn_var_shift_data(Atm(n)%ua, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%va, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%q, interp_type, wt_h, Atm(child_grid_idx)%neststruct%ind_h, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%u, interp_type_u, wt_u, Atm(child_grid_idx)%neststruct%ind_u, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position_u, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position_u, nest_level, nz)
 
     call mn_var_shift_data(Atm(n)%v, interp_type_v, wt_v, Atm(child_grid_idx)%neststruct%ind_v, &
-        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position_v, nest_level, nz)
+        delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position_v, nest_level, nz)
 
   end subroutine mn_prog_shift_data
 
@@ -1164,15 +1166,16 @@ contains
   !! Step 6 - per variable
   !!============================================================================
 
-  !>@brief The subroutine 'mn_prog_shift_data_r4_2d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r4_2d' shifts the data for a variable on each nest PE
   !>@details For single variable
-  subroutine mn_var_shift_data_r4_2d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level)
+  subroutine mn_var_shift_data_r4_2d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level)
     real*4, allocatable, intent(inout)          :: data_var(:,:)                                !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
     real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
     integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position                                     !< Grid offset
     integer, intent(in)                         :: nest_level                                   !< Nest level
@@ -1195,10 +1198,14 @@ contains
     call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nest_level)
 
     !====================================================
-    ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
+    !!
+    !! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
+    !!
+    !====================================================
+
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -1220,7 +1227,6 @@ contains
       !!
       !!===========================================================
 
-
       call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind)
       call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind)
       call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind)
@@ -1234,9 +1240,9 @@ contains
 
   end subroutine mn_var_shift_data_r4_2d
 
-  !>@brief The subroutine 'mn_prog_shift_data_r8_2d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r8_2d' shifts the data for a variable on each nest PE
   !>@details For one double precision 2D variable
-  subroutine mn_var_shift_data_r8_2d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level)
+  subroutine mn_var_shift_data_r8_2d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level)
 
     real*8, allocatable, intent(inout)          :: data_var(:,:)                            !< Data variable
     integer, intent(in)                         :: interp_type                              !< Interpolation stagger type
@@ -1244,6 +1250,7 @@ contains
     integer, allocatable, intent(in)            :: ind(:,:,:)                               !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position                                     !< Grid offset
     integer, intent(in)                         :: nest_level                                   !< Nest level
@@ -1268,7 +1275,7 @@ contains
     ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -1303,9 +1310,9 @@ contains
 
   end subroutine mn_var_shift_data_r8_2d
 
-  !>@brief The subroutine 'mn_prog_shift_data_r4_3d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r4_3d' shifts the data for a variable on each nest PE
   !>@details For one single precision 3D variable
-  subroutine mn_var_shift_data_r4_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+  subroutine mn_var_shift_data_r4_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     real*4, allocatable, intent(inout)          :: data_var(:,:,:)                          !< Data variable
     integer, intent(in)                         :: interp_type                              !< Interpolation stagger type
@@ -1313,6 +1320,7 @@ contains
     integer, allocatable, intent(in)            :: ind(:,:,:)                               !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                               !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                              !< Nest domain structure
     integer, intent(in)                         :: position, nest_level, nz                 !< Grid offset, nest level, number of vertical levels
 
@@ -1333,13 +1341,15 @@ contains
     call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, nest_level, nz)
     call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nest_level, nz)
 
-
     !====================================================
+    !!
     ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
+    !!
+    !====================================================
 
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -1375,9 +1385,9 @@ contains
   end subroutine mn_var_shift_data_r4_3d
 
 
-  !>@brief The subroutine 'mn_prog_shift_data_r8_3d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r8_3d' shifts the data for a variable on each nest PE
   !>@details For one double precision 3D variable
-  subroutine mn_var_shift_data_r8_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+  subroutine mn_var_shift_data_r8_3d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
 
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)                              !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
@@ -1385,6 +1395,7 @@ contains
     integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position, nest_level, nz                     !< Grid offset, nest level, number vertical levels
 
@@ -1406,10 +1417,14 @@ contains
     call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nest_level, nz)
 
     !====================================================
+    !!
     ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
+    !!
+    !====================================================
+
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
       !!===========================================================
       !!
       !! Shift grids internal to each nest PE
@@ -1444,15 +1459,16 @@ contains
   end subroutine mn_var_shift_data_r8_3d
 
 
-  !>@brief The subroutine 'mn_prog_shift_data_r4_4d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r4_4d' shifts the data for a variable on each nest PE
   !>@details For one single precision 4D variable
-  subroutine mn_var_shift_data_r4_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+  subroutine mn_var_shift_data_r4_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
     real*4, allocatable, intent(inout)          :: data_var(:,:,:,:)                            !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
     real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
     integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position, nest_level, nz                     !< Grid offset, nest level, number of vertical levels
 
@@ -1465,23 +1481,58 @@ contains
 
     do nq=1, n4d
       data_slice = data_var(:,:,:,nq)
-      call mn_var_shift_data_r4_3d(data_slice, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+      call mn_var_shift_data_r4_3d(data_slice, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
       data_var(:,:,:,nq) = data_slice
     enddo
+
+    deallocate(data_slice)
 
   end subroutine mn_var_shift_data_r4_4d
 
 
-#ifdef USE_4D
-  !>@brief The subroutine 'mn_prog_shift_data_r4_4d' shifts the data for a variable on each nest PE
+
+  !>@brief The subroutine 'mn_var_shift_data_r4_4d' shifts the data for a variable on each nest PE
   !>@details For one single precision 4D variable
-  subroutine mn_var_shift_data_r4_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+  subroutine mn_var_shift_data_r8_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
+    real*8, allocatable, intent(inout)          :: data_var(:,:,:,:)                            !< Data variable
+    integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
+    real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
+    integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
+    integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
+    logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
+    type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
+    integer, intent(in)                         :: position, nest_level, nz                     !< Grid offset, nest level, number of vertical levels
+
+
+    integer :: nq, n4d
+    real*8, allocatable :: data_slice(:,:,:)
+
+    n4d = size(data_var, 4)
+    allocate(data_slice(lbound(data_var,1):ubound(data_var,1), lbound(data_var,2):ubound(data_var,2), lbound(data_var,3):ubound(data_var,3)))
+
+    do nq=1, n4d
+      data_slice = data_var(:,:,:,nq)
+      call mn_var_shift_data_r8_3d(data_slice, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
+      data_var(:,:,:,nq) = data_slice
+    enddo
+
+    deallocate(data_slice)
+
+  end subroutine mn_var_shift_data_r8_4d
+
+
+#ifdef USE_4D
+  !>@brief The subroutine 'mn_var_shift_data_r4_4d' shifts the data for a variable on each nest PE
+  !>@details For one single precision 4D variable
+  subroutine mn_var_shift_data_r4_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
     real*4, allocatable, intent(inout)          :: data_var(:,:,:,:)                            !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
     real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
     integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position, nest_level, nz                     !< Grid offset, nest level, number of vertical levels
 
@@ -1510,7 +1561,7 @@ contains
     ! Passes data from coarse grid to fine grid's halo
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
       !!===========================================================
       !!
       !! Shift grids internal to each nest PE
@@ -1544,17 +1595,17 @@ contains
 
   end subroutine mn_var_shift_data_r4_4d
 
-#endif
 
-  !>@brief The subroutine 'mn_prog_shift_data_r8_4d' shifts the data for a variable on each nest PE
+  !>@brief The subroutine 'mn_var_shift_data_r8_4d' shifts the data for a variable on each nest PE
   !>@details For one double precision 4D variable
-  subroutine mn_var_shift_data_r8_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+  subroutine mn_var_shift_data_r8_4d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, take_action, nest_domain, position, nest_level, nz)
     real*8, allocatable, intent(inout)          :: data_var(:,:,:,:)                            !< Data variable
     integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
     real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
     integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
     integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
     logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    logical, intent(in)                         :: take_action                                  !< Perform move on this nest?
     type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
     integer, intent(in)                         :: position, nest_level, nz                     !< Grid offset, nest level, number of vertical levels
 
@@ -1580,9 +1631,16 @@ contains
 
     !====================================================
     ! Passes data from coarse grid to fine grid's halo
-    call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+
+    !!  CAUTION:  The order of the buffer arguments seems to vary between different calls!!
+    !! mpp_update_nest_domains.fh:   subroutine MPP_UPDATE_NEST_FINE_4D_(field, nest_domain, wbuffer, ebuffer, sbuffer, nbuffer, &
+    !! though the 4D seems to call 3D in a way that makes all correspond to the 3D ordering
+
+    call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
+    !call mpp_update_nest_fine(data_var, nest_domain, wbuffer, ebuffer, sbuffer, nbuffer, nest_level, position=position)
+
+    if (is_fine_pe .and. take_action) then
       !!===========================================================
       !!
       !! Shift grids internal to each nest PE
@@ -1615,6 +1673,7 @@ contains
     deallocate(wbuffer)
 
   end subroutine mn_var_shift_data_r8_4d
+#endif
 
 
   !================================================================================
