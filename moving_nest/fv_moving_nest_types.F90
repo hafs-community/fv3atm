@@ -122,6 +122,10 @@ module fv_moving_nest_types_mod
   end type mn_surface_grids
 
   type fv_moving_nest_physics_type
+    integer                             :: isd, ied, jsd, jed, npz
+    logical                             :: move_physics, move_nsst
+    integer                             :: lsoil, nmtvr, levs, ntot2d, ntot3d
+
     real, _ALLOCATABLE                  :: ts(:,:)          _NULL   !< 2D skin temperature/SST
     real, _ALLOCATABLE                  :: slmsk(:,:)       _NULL   !< land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
     real (kind=kind_phys), _ALLOCATABLE :: smc (:,:,:)      _NULL   !< soil moisture content
@@ -208,6 +212,10 @@ module fv_moving_nest_types_mod
     !  Land Sea Mask has values of 0 for oceans/lakes, 1 for land, 2 for sea ice
     real (kind=kind_phys), _ALLOCATABLE :: dt_cool (:,:)    _NULL   !< sub-layer cooling amount for NSSTM
     real (kind=kind_phys), _ALLOCATABLE :: qrain (:,:)      _NULL   !< sensible heat flux due to rainfall for NSSTM
+
+  contains
+
+    procedure, public :: alloc_dealloc => fv_moving_nest_physics_alloc_dealloc
 
   end type fv_moving_nest_physics_type
 
@@ -351,287 +359,146 @@ contains
 
   end subroutine deallocate_fv_moving_nest_prog_type
 
+  subroutine  deallocate_fv_moving_nest_physics_type(mn_phys)
+    implicit none
+    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
+
+    call mn_phys%alloc_dealloc(.false.)
+  end subroutine deallocate_fv_moving_nest_physics_type
+
   subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_nsst, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
+    implicit none
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
     logical, intent(in)                           :: move_physics, move_nsst
     integer, intent(in)                           :: lsoil, nmtvr, levs, ntot2d, ntot3d    ! From IPD_Control
     type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
 
+    mn_phys%isd = isd
+    mn_phys%ied = ied
+    mn_phys%jsd = jsd
+    mn_phys%jed = jed
+    mv_nest%npz = npz
+    mv_nest%move_physics = move_physics
+    mv_nest%move_nsst = move_nsst
+    mv_nest%lsoil = lsoil
+    mv_nest%nmtvr = nmtvr
+    mv_nest%levs = levs
+    mv_nest%ntot2d = ntot2d
+    mv_nest%ntot3d = ntot3d
+
+    call mn_phys%alloc_dealloc(.true.)
+  end subroutine allocate_fv_moving_nest_physics_type
+
+  subroutine fv_moving_nest_physics_alloc_dealloc(mn_phys, to_alloc)
+    implicit none
+    class(fv_moving_nest_physics_type) :: mn_phys
+    logical, intent(in) :: to_alloc
+
+#define ALLOC_DEALLOC_2D(var, idim, jdim) \
+    if (to_alloc) then ; \
+      allocate ( mn_phys%var(idim, jdim) ) ; \
+      mn_phys%var = +99999.9 ; \
+    else if(allocated(mn_phys%var)) then ; \
+      deallocate ( mn_phys%var ) ; \
+    endif
+
+#define ALLOC_DEALLOC_3D(var, idim, jdim, kdim) \
+    if (to_alloc) then ; \
+      allocate ( mn_phys%var(idim, jdim, kdim) ) ; \
+      mn_phys%var = +99999.9 ; \
+    else if(allocated(mn_phys%var)) then ; \
+      deallocate ( mn_phys%var ) ; \
+    endif
+
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
-    allocate ( mn_phys%ts(isd:ied, jsd:jed) )
+    ALLOC_DEALLOC_2D(ts, isd:ied, jsd:jed)
 
     if (move_physics) then
-      allocate ( mn_phys%slmsk(isd:ied, jsd:jed) )
-      allocate ( mn_phys%smc(isd:ied, jsd:jed, lsoil) )
-      allocate ( mn_phys%stc(isd:ied, jsd:jed, lsoil) )
-      allocate ( mn_phys%slc(isd:ied, jsd:jed, lsoil) )
+      ALLOC_DEALLOC_2D(slmsk, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_3D(smc, isd:ied, jsd:jed, lsoil)
+      ALLOC_DEALLOC_3D(stc, isd:ied, jsd:jed, lsoil)
+      ALLOC_DEALLOC_3D(slc, isd:ied, jsd:jed, lsoil)
 
-      allocate ( mn_phys%sfalb_lnd(isd:ied, jsd:jed) )
-      allocate ( mn_phys%emis_lnd(isd:ied, jsd:jed) )
-      allocate ( mn_phys%emis_ice(isd:ied, jsd:jed) )
-      allocate ( mn_phys%emis_wat(isd:ied, jsd:jed) )
-      allocate ( mn_phys%sfalb_lnd_bck(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(sfalb_lnd, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(emis_lnd, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(emis_ice, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(emis_wat, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(sfalb_lnd_bck, isd:ied, jsd:jed)
 
-      !allocate ( mn_phys%semis(isd:ied, jsd:jed) )
-      !allocate ( mn_phys%semisbase(isd:ied, jsd:jed) )
-      !allocate ( mn_phys%sfalb(isd:ied, jsd:jed) )
+      !ALLOC_DEALLOC_2D(semis, isd:ied, jsd:jed)
+      !ALLOC_DEALLOC_2D(semisbase, isd:ied, jsd:jed)
+      !ALLOC_DEALLOC_2D(sfalb, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%u10m(isd:ied, jsd:jed) )
-      allocate ( mn_phys%v10m(isd:ied, jsd:jed) )
-      allocate ( mn_phys%tprcp(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(u10m, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(v10m, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(tprcp, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%hprime(isd:ied, jsd:jed, nmtvr) )
+      ALLOC_DEALLOC_3D(hprime, isd:ied, jsd:jed, nmtvr)
 
-      allocate ( mn_phys%zorl(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zorll(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zorlwav(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zorlw(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(zorl, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(zorll, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(zorlwav, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(zorlw, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%usfco(isd:ied, jsd:jed) )
-      allocate ( mn_phys%vsfco(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(usfco, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(vsfco, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%alvsf(isd:ied, jsd:jed) )
-      allocate ( mn_phys%alvwf(isd:ied, jsd:jed) )
-      allocate ( mn_phys%alnsf(isd:ied, jsd:jed) )
-      allocate ( mn_phys%alnwf(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(alvsf, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(alvwf, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(alnsf, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(alnwf, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%facsf(isd:ied, jsd:jed) )
-      allocate ( mn_phys%facwf(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(facsf, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(facwf, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%lakefrac(isd:ied, jsd:jed) )
-      allocate ( mn_phys%lakedepth(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(lakefrac, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(lakedepth, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%canopy(isd:ied, jsd:jed) )
-      allocate ( mn_phys%vegfrac(isd:ied, jsd:jed) )
-      allocate ( mn_phys%uustar(isd:ied, jsd:jed) )
-      allocate ( mn_phys%shdmin(isd:ied, jsd:jed) )
-      allocate ( mn_phys%shdmax(isd:ied, jsd:jed) )
-      allocate ( mn_phys%tsfco(isd:ied, jsd:jed) )
-      allocate ( mn_phys%tsfcl(isd:ied, jsd:jed) )
-      allocate ( mn_phys%tsfc(isd:ied, jsd:jed) )
-      !allocate ( mn_phys%tsfc_radtime(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(canopy, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(vegfrac, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(uustar, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(shdmin, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(shdmax, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(tsfco, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(tsfcl, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(tsfc, isd:ied, jsd:jed)
+      !ALLOC_DEALLOC_2D(tsfc_radtime, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%albdirvis_lnd (isd:ied, jsd:jed) )
-      allocate ( mn_phys%albdirnir_lnd (isd:ied, jsd:jed) )
-      allocate ( mn_phys%albdifvis_lnd (isd:ied, jsd:jed) )
-      allocate ( mn_phys%albdifnir_lnd (isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(albdirvis_lnd , isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(albdirnir_lnd , isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(albdifvis_lnd , isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(albdifnir_lnd , isd:ied, jsd:jed)
 
-      allocate ( mn_phys%cv(isd:ied, jsd:jed) )
-      allocate ( mn_phys%cvt(isd:ied, jsd:jed) )
-      allocate ( mn_phys%cvb(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(cv, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(cvt, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(cvb, isd:ied, jsd:jed)
 
-      allocate ( mn_phys%phy_f2d(isd:ied, jsd:jed, ntot2d) )
-      allocate ( mn_phys%phy_f3d(isd:ied, jsd:jed, levs, ntot3d) )
+      ALLOC_DEALLOC_3D(phy_f2d, isd:ied, jsd:jed, ntot2d)
+      ALLOC_DEALLOC_3D(phy_f3d, isd:ied, jsd:jed, levs, ntot3d)
     end if
 
     if (move_nsst) then
       allocate ( mn_phys%tref(isd:ied, jsd:jed) )
-      allocate ( mn_phys%z_c(isd:ied, jsd:jed) )
-      allocate ( mn_phys%c_0(isd:ied, jsd:jed) )
-      allocate ( mn_phys%c_d(isd:ied, jsd:jed) )
-      allocate ( mn_phys%w_0(isd:ied, jsd:jed) )
-      allocate ( mn_phys%w_d(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xt(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xs(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xu(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xv(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xz(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zm(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xtts(isd:ied, jsd:jed) )
-      allocate ( mn_phys%xzts(isd:ied, jsd:jed) )
-      allocate ( mn_phys%d_conv(isd:ied, jsd:jed) )
-      !allocate ( mn_phys%ifd(isd:ied, jsd:jed) )
-      allocate ( mn_phys%dt_cool(isd:ied, jsd:jed) )
-      allocate ( mn_phys%qrain(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(z_c, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(c_0, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(c_d, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(w_0, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(w_d, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xt, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xs, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xu, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xv, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xz, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(zm, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xtts, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(xzts, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(d_conv, isd:ied, jsd:jed)
+      !ALLOC_DEALLOC_2D(ifd, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(dt_cool, isd:ied, jsd:jed)
+      ALLOC_DEALLOC_2D(qrain, isd:ied, jsd:jed)
     end if
 
-    mn_phys%ts = +99999.9
-    if (move_physics) then
-      mn_phys%slmsk = +99999.9
-      mn_phys%smc = +99999.9
-      mn_phys%stc = +99999.9
-      mn_phys%slc = +99999.9
+  end subroutine fv_moving_nest_physics_alloc_dealloc
 
-
-      mn_phys%sfalb_lnd = +99999.9
-      mn_phys%emis_lnd = +99999.9
-      mn_phys%emis_ice = +99999.9
-      mn_phys%emis_wat = +99999.9
-      mn_phys%sfalb_lnd_bck = +99999.9
-
-      !mn_phys%semis = +99999.9
-      !mn_phys%semisbase = +99999.9
-      !mn_phys%sfalb = +99999.9
-
-      mn_phys%u10m = +99999.9
-      mn_phys%v10m = +99999.9
-      mn_phys%tprcp = +99999.9
-
-      mn_phys%hprime = +99999.9
-
-      mn_phys%zorl = +99999.9
-      mn_phys%zorll = +99999.9
-      mn_phys%zorlwav = +99999.9
-      mn_phys%zorlw = +99999.9
-
-      mn_phys%usfco = +99999.9
-      mn_phys%vsfco = +99999.9
-
-      mn_phys%alvsf = +99999.9
-      mn_phys%alvwf = +99999.9
-      mn_phys%alnsf = +99999.9
-      mn_phys%alnwf = +99999.9
-
-      mn_phys%facsf = +99999.9
-      mn_phys%facwf = +99999.9
-
-      mn_phys%lakefrac = +99999.9
-      mn_phys%lakedepth = +99999.9
-
-      mn_phys%canopy = +99999.9
-      mn_phys%vegfrac = +99999.9
-      mn_phys%uustar = +99999.9
-      mn_phys%shdmin = +99999.9
-      mn_phys%shdmax = +99999.9
-      mn_phys%tsfco = +99999.9
-      mn_phys%tsfcl = +99999.9
-      mn_phys%tsfc = +99999.9
-      !mn_phys%tsfc_radtime = +99999.9
-
-      mn_phys%albdirvis_lnd = +99999.9
-      mn_phys%albdirnir_lnd = +99999.9
-      mn_phys%albdifvis_lnd = +99999.9
-      mn_phys%albdifnir_lnd = +99999.9
-
-      mn_phys%cv = +99999.9
-      mn_phys%cvt = +99999.9
-      mn_phys%cvb = +99999.9
-
-      mn_phys%phy_f2d = +99999.9
-      mn_phys%phy_f3d = +99999.9
-    end if
-
-    if (move_nsst) then
-      mn_phys%tref = +99999.9
-      mn_phys%z_c = +99999.9
-      mn_phys%c_0 = +99999.9
-      mn_phys%c_d = +99999.9
-      mn_phys%w_0 = +99999.9
-      mn_phys%w_d = +99999.9
-      mn_phys%xt = +99999.9
-      mn_phys%xs = +99999.9
-      mn_phys%xu = +99999.9
-      mn_phys%xv = +99999.9
-      mn_phys%xz = +99999.9
-      mn_phys%zm = +99999.9
-      mn_phys%xtts = +99999.9
-      mn_phys%xzts = +99999.9
-      mn_phys%d_conv = +99999.9
-      !mn_phys%ifd = +99999.9
-      mn_phys%dt_cool = +99999.9
-      mn_phys%qrain = +99999.9
-    end if
-
-  end subroutine allocate_fv_moving_nest_physics_type
-
-
-  subroutine  deallocate_fv_moving_nest_physics_type(mn_phys)
-    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
-
-    if (allocated(mn_phys%ts)) then
-      deallocate ( mn_phys%ts )
-    else
-      ! If ts was not allocated, then none of this structure was allocated.
-      return
-    end if
-
-    !  if move_phys
-    if (allocated(mn_phys%smc)) then
-      deallocate( mn_phys%slmsk )
-      deallocate( mn_phys%smc )
-      deallocate( mn_phys%stc )
-      deallocate( mn_phys%slc )
-
-      deallocate( mn_phys%sfalb_lnd )
-      deallocate( mn_phys%emis_lnd )
-      deallocate( mn_phys%emis_ice )
-      deallocate( mn_phys%emis_wat )
-      deallocate( mn_phys%sfalb_lnd_bck )
-
-      !deallocate( mn_phys%semis )
-      !deallocate( mn_phys%semisbase )
-      !deallocate( mn_phys%sfalb )
-
-      deallocate( mn_phys%u10m )
-      deallocate( mn_phys%v10m )
-      deallocate( mn_phys%tprcp )
-
-      deallocate( mn_phys%hprime )
-
-      deallocate( mn_phys%zorl )
-      deallocate( mn_phys%zorll )
-      deallocate( mn_phys%zorlwav )
-      deallocate( mn_phys%zorlw )
-
-      deallocate( mn_phys%usfco )
-      deallocate( mn_phys%vsfco )
-
-      deallocate( mn_phys%alvsf )
-      deallocate( mn_phys%alvwf )
-      deallocate( mn_phys%alnsf )
-      deallocate( mn_phys%alnwf )
-
-      deallocate( mn_phys%facsf )
-      deallocate( mn_phys%facwf )
-
-      deallocate( mn_phys%lakefrac )
-      deallocate( mn_phys%lakedepth )
-
-      deallocate( mn_phys%canopy )
-      deallocate( mn_phys%vegfrac )
-      deallocate( mn_phys%uustar )
-      deallocate( mn_phys%shdmin )
-      deallocate( mn_phys%shdmax )
-      deallocate( mn_phys%tsfco )
-      deallocate( mn_phys%tsfcl )
-      deallocate( mn_phys%tsfc )
-      !deallocate( mn_phys%tsfc_radtime )
-
-      deallocate( mn_phys%albdirvis_lnd )
-      deallocate( mn_phys%albdirnir_lnd )
-      deallocate( mn_phys%albdifvis_lnd )
-      deallocate( mn_phys%albdifnir_lnd )
-
-      deallocate( mn_phys%cv )
-      deallocate( mn_phys%cvt )
-      deallocate( mn_phys%cvb )
-
-      deallocate( mn_phys%phy_f2d )
-      deallocate( mn_phys%phy_f3d )
-    end if
-
-    ! if move_nsst
-    if (allocated( mn_phys%tref )) then
-      deallocate( mn_phys%tref )
-      deallocate( mn_phys%z_c )
-      deallocate( mn_phys%c_0 )
-      deallocate( mn_phys%c_d )
-      deallocate( mn_phys%w_0 )
-      deallocate( mn_phys%w_d )
-      deallocate( mn_phys%xt )
-      deallocate( mn_phys%xs )
-      deallocate( mn_phys%xu )
-      deallocate( mn_phys%xv )
-      deallocate( mn_phys%xz )
-      deallocate( mn_phys%zm )
-      deallocate( mn_phys%xtts )
-      deallocate( mn_phys%xzts )
-      deallocate( mn_phys%d_conv )
-      !deallocate( mn_phys%ifd )
-      deallocate( mn_phys%dt_cool )
-      deallocate( mn_phys%qrain )
-    end if
-
-  end subroutine deallocate_fv_moving_nest_physics_type
 
 end module fv_moving_nest_types_mod
