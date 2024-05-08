@@ -377,14 +377,14 @@ contains
     mn_phys%ied = ied
     mn_phys%jsd = jsd
     mn_phys%jed = jed
-    mv_nest%npz = npz
-    mv_nest%move_physics = move_physics
-    mv_nest%move_nsst = move_nsst
-    mv_nest%lsoil = lsoil
-    mv_nest%nmtvr = nmtvr
-    mv_nest%levs = levs
-    mv_nest%ntot2d = ntot2d
-    mv_nest%ntot3d = ntot3d
+    mn_phys%npz = npz
+    mn_phys%move_physics = move_physics
+    mn_phys%move_nsst = move_nsst
+    mn_phys%lsoil = lsoil
+    mn_phys%nmtvr = nmtvr
+    mn_phys%levs = levs
+    mn_phys%ntot2d = ntot2d
+    mn_phys%ntot3d = ntot3d
 
     call mn_phys%alloc_dealloc(.true.)
   end subroutine allocate_fv_moving_nest_physics_type
@@ -394,20 +394,50 @@ contains
     class(fv_moving_nest_physics_type) :: mn_phys
     logical, intent(in) :: to_alloc
 
+    integer :: isd, ied, jsd, jed, npz
+    logical :: move_physics, move_nsst
+    integer :: lsoil, nmtvr, levs, ntot2d, ntot3d
+
+    ! Copy these to locals to reduce typing
+    isd = mn_phys%isd
+    ied = mn_phys%ied
+    jsd = mn_phys%jsd
+    jed = mn_phys%jed
+    npz = mn_phys%npz
+    move_physics = mn_phys%move_physics
+    move_nsst = mn_phys%move_nsst
+    lsoil = mn_phys%lsoil
+    nmtvr = mn_phys%nmtvr
+    levs = mn_phys%levs
+    ntot2d = mn_phys%ntot2d
+    ntot3d = mn_phys%ntot3d
+
+    ! These preprocessor macros vastly reduce code length.
 #define ALLOC_DEALLOC_2D(var, idim, jdim) \
+    if(allocated(mn_phys%var)) then ; \
+      deallocate ( mn_phys%var ) ; \
+    endif ; \
     if (to_alloc) then ; \
       allocate ( mn_phys%var(idim, jdim) ) ; \
       mn_phys%var = +99999.9 ; \
-    else if(allocated(mn_phys%var)) then ; \
-      deallocate ( mn_phys%var ) ; \
     endif
 
 #define ALLOC_DEALLOC_3D(var, idim, jdim, kdim) \
+    if(allocated(mn_phys%var)) then ; \
+      deallocate ( mn_phys%var ) ; \
+    endif ; \
     if (to_alloc) then ; \
       allocate ( mn_phys%var(idim, jdim, kdim) ) ; \
       mn_phys%var = +99999.9 ; \
-    else if(allocated(mn_phys%var)) then ; \
+    endif
+
+#define ALLOC_DEALLOC_4D(var, idim, jdim, kdim, mdim) \
+    if(allocated(mn_phys%var)) then ; \
       deallocate ( mn_phys%var ) ; \
+    endif ; \
+    if (to_alloc) then ; \
+      allocate ( mn_phys%var(idim, jdim, kdim, mdim) ) ; \
+      mn_phys%var = +99999.9 ; \
     endif
 
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
@@ -474,11 +504,11 @@ contains
       ALLOC_DEALLOC_2D(cvb, isd:ied, jsd:jed)
 
       ALLOC_DEALLOC_3D(phy_f2d, isd:ied, jsd:jed, ntot2d)
-      ALLOC_DEALLOC_3D(phy_f3d, isd:ied, jsd:jed, levs, ntot3d)
+      ALLOC_DEALLOC_4D(phy_f3d, isd:ied, jsd:jed, levs, ntot3d)
     end if
 
     if (move_nsst) then
-      allocate ( mn_phys%tref(isd:ied, jsd:jed) )
+      ALLOC_DEALLOC_2D(tref, isd:ied, jsd:jed)
       ALLOC_DEALLOC_2D(z_c, isd:ied, jsd:jed)
       ALLOC_DEALLOC_2D(c_0, isd:ied, jsd:jed)
       ALLOC_DEALLOC_2D(c_d, isd:ied, jsd:jed)
@@ -497,6 +527,11 @@ contains
       ALLOC_DEALLOC_2D(dt_cool, isd:ied, jsd:jed)
       ALLOC_DEALLOC_2D(qrain, isd:ied, jsd:jed)
     end if
+
+    ! These macros are only used locally. We remove them from the preprocessor namespace here to avoid cluttering it.
+#undef ALLOC_DEALLOC_2D
+#undef ALLOC_DEALLOC_3D
+#undef ALLOC_DEALLOC_4D
 
   end subroutine fv_moving_nest_physics_alloc_dealloc
 
