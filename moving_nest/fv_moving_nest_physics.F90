@@ -572,6 +572,16 @@ contains
            call copy2Dphys(to_block, mn_phys, mn_phys%emis_wat, IPD_Data(nb)%Sfcprop%emis_wat, ii, jj, &
                 if_negative=0.5_kind_phys)
 
+           ! Set albedo values to physically reasonable values if they have negative fill values.
+           call copy2Dphys(to_block, mn_phys, mn_phys%albdirvis_lnd , IPD_Data(nb)%Sfcprop%albdirvis_lnd , ii, jj, &
+                if_negative=0.5_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%albdirnir_lnd , IPD_Data(nb)%Sfcprop%albdirnir_lnd , ii, jj, &
+                if_negative=0.5_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%albdifvis_lnd , IPD_Data(nb)%Sfcprop%albdifvis_lnd , ii, jj, &
+                if_negative=0.5_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%albdifnir_lnd , IPD_Data(nb)%Sfcprop%albdifnir_lnd , ii, jj, &
+                if_negative=0.5_kind_phys)
+
            !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
            !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
            !call copy2Dphys(to_block, mn_phys, mn_phys%semis, IPD_Data(nb)%Radtend%semis, ii, jj)
@@ -592,6 +602,22 @@ contains
            call copy2Dphys(to_block, mn_phys, mn_phys%uustar, IPD_Data(nb)%Sfcprop%uustar, ii, jj)
            call copy2Dphys(to_block, mn_phys, mn_phys%shdmin, IPD_Data(nb)%Sfcprop%shdmin, ii, jj)
            call copy2Dphys(to_block, mn_phys, mn_phys%shdmax, IPD_Data(nb)%Sfcprop%shdmax, ii, jj)
+
+            ! Set roughness lengths to physically reasonable values if they have fill value (possible at coastline)
+            ! sea/land mask array (sea:0,land:1,sea-ice:2)
+           call copy2Dphys(to_block, mn_phys, mn_phys%zorll, IPD_Data(nb)%Sfcprop%zorll, ii, jj, &
+                slmsk=slmsk, if_missing_on_land=82.0_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%zorlw, IPD_Data(nb)%Sfcprop%zorlw, ii, jj, &
+                slmsk=slmsk, if_missing_on_sea=83.0_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%zorlwav, IPD_Data(nb)%Sfcprop%zorlwav, ii, jj, &
+                slmsk=slmsk, if_missing_on_sea=84.0_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%zorl, IPD_Data(nb)%Sfcprop%zorl, ii, jj, &
+                if_missing=85.0_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%usfco, IPD_Data(nb)%Sfcprop%usfco, ii, jj, &
+                slmsk=slmsk, if_missing_on_sea=0.0_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%vsfco, IPD_Data(nb)%Sfcprop%vsfco, ii, jj, &
+                slmsk=slmsk, if_missing_on_sea=0.0_kind_phys)
+
            call copy2Dphys(to_block, mn_phys, mn_phys%tsfco, IPD_Data(nb)%Sfcprop%tsfco, ii, jj)
            call copy2Dphys(to_block, mn_phys, mn_phys%tsfcl, IPD_Data(nb)%Sfcprop%tsfcl, ii, jj)
            call copy2Dphys(to_block, mn_phys, mn_phys%tsfc, IPD_Data(nb)%Sfcprop%tsfc, ii, jj)
@@ -624,81 +650,10 @@ contains
           call copy2Dphys(to_block, mn_phys, mn_phys%dt_cool, IPD_Data(nb)%Sfcprop%dt_cool, ii, jj)
           call copy2Dphys(to_block, mn_phys, mn_phys%qrain, IPD_Data(nb)%Sfcprop%qrain, ii, jj)
         endif
-      enddo block_loop
 
-      do nb = 1,Atm_block%nblks
+        ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
         blen = Atm_block%blksz(nb)
         do ix = 1, blen
-          i = Atm_block%index(nb)%ii(ix)
-          j = Atm_block%index(nb)%jj(ix)
-
-          if (move_physics) then
-
-            ! Set roughness lengths to physically reasonable values if they have fill value (possible at coastline)
-            ! sea/land mask array (sea:0,land:1,sea-ice:2)
-            if (nint(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 1 .and. mn_phys%zorll(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%zorll(ix)  = 82.0   !
-            else
-              IPD_Data(nb)%Sfcprop%zorll(ix)  = mn_phys%zorll(i,j)
-            endif
-
-            if (nint(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 0 .and. mn_phys%zorlw(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%zorlw(ix)  = 83.0   !
-            else
-              IPD_Data(nb)%Sfcprop%zorlw(ix)  = mn_phys%zorlw(i,j)
-            endif
-
-            if (nint(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 0 .and. mn_phys%zorlwav(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%zorlwav(ix)  = 84.0   !
-            else
-              IPD_Data(nb)%Sfcprop%zorlwav(ix)  = mn_phys%zorlwav(i,j)
-            endif
-
-            if (mn_phys%zorl(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%zorl(ix)   = 85.0
-            else
-              IPD_Data(nb)%Sfcprop%zorl(ix)   = mn_phys%zorl(i,j)
-            endif
-
-            if (nint(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 0 .and. mn_phys%usfco(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%usfco(ix)  = 0.0
-            else
-              IPD_Data(nb)%Sfcprop%usfco(ix)  = mn_phys%usfco(i,j)
-            endif
-            if (nint(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 0 .and. mn_phys%vsfco(i,j) .gt. 1e6) then
-              IPD_Data(nb)%Sfcprop%vsfco(ix)  = 0.0
-            else
-              IPD_Data(nb)%Sfcprop%vsfco(ix)  = mn_phys%vsfco(i,j)
-            endif
-
-            ! Set albedo values to physically reasonable values if they have negative fill values.
-            if (mn_phys%albdirvis_lnd (i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%albdirvis_lnd (ix)   = mn_phys%albdirvis_lnd (i,j)
-            else
-              IPD_Data(nb)%Sfcprop%albdirvis_lnd (ix)   = 0.5
-            endif
-
-            if (mn_phys%albdirnir_lnd (i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%albdirnir_lnd (ix)   = mn_phys%albdirnir_lnd (i,j)
-            else
-              IPD_Data(nb)%Sfcprop%albdirnir_lnd (ix)   = 0.5
-            endif
-
-            if (mn_phys%albdifvis_lnd (i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%albdifvis_lnd (ix)   = mn_phys%albdifvis_lnd (i,j)
-            else
-              IPD_Data(nb)%Sfcprop%albdifvis_lnd (ix)   = 0.5
-            endif
-
-            if (mn_phys%albdifnir_lnd (i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%albdifnir_lnd (ix)   = mn_phys%albdifnir_lnd (i,j)
-            else
-              IPD_Data(nb)%Sfcprop%albdifnir_lnd (ix)   = 0.5
-            endif
-          endif
-
-
-          ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
           if ( (int(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 1) )  then
 
             if (IPD_data(nb)%Sfcprop%vtype(ix) .lt. 0.5) then
@@ -718,7 +673,7 @@ contains
 
           endif
         enddo
-      enddo
+      enddo block_loop
     endif
 
   end subroutine mn_phys_apply_temp_variables
