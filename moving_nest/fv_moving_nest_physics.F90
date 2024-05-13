@@ -348,7 +348,12 @@ contains
       jj => Atm_block%index(nb)%jj
 
       if_move_physics: if (move_physics) then
-        call try2(mn_phys, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
+        call copy3Dphys(to_block, mn_phys, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
+        call copy3Dphys(to_block, mn_phys, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
+        call copy3Dphys(to_block, mn_phys, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
+        call copy3Dphys(to_block, mn_phys, mn_phys%hprime,  IPD_Data(nb)%Sfcprop%hprime, ii, jj)
+        call copy3Dphys(to_block, mn_phys, mn_phys%phy_f2d, IPD_Data(nb)%Tbd%phy_f2d, ii, jj)
+        call copy4Dphys(to_block, mn_phys, mn_phys%phy_f3d, IPD_Data(nb)%Tbd%phy_f3d, ii, jj)
       endif if_move_physics
     enddo block_loop
 
@@ -362,8 +367,6 @@ contains
         if (move_physics) then
           do k = 1, IPD_Control%lsoil
             !mn_phys%smc(i,j,k) = IPD_Data(nb)%Sfcprop%smc(ix,k)
-            mn_phys%stc(i,j,k) = IPD_Data(nb)%Sfcprop%stc(ix,k)
-            mn_phys%slc(i,j,k) = IPD_Data(nb)%Sfcprop%slc(ix,k)
           enddo
 
           mn_phys%emis_lnd(i,j)      = IPD_Data(nb)%Sfcprop%emis_lnd(ix)
@@ -384,10 +387,6 @@ contains
           mn_phys%u10m(i,j)  = IPD_Data(nb)%IntDiag%u10m(ix)
           mn_phys%v10m(i,j)  = IPD_Data(nb)%IntDiag%v10m(ix)
           mn_phys%tprcp(i,j)  = IPD_Data(nb)%Sfcprop%tprcp(ix)
-
-          do k = 1, IPD_Control%nmtvr
-            mn_phys%hprime(i,j,k)  = IPD_Data(nb)%Sfcprop%hprime(ix,k)
-          enddo
 
           mn_phys%lakefrac(i,j) = IPD_Data(nb)%Sfcprop%lakefrac(ix)
           mn_phys%lakedepth(i,j) = IPD_Data(nb)%Sfcprop%lakedepth(ix)
@@ -411,16 +410,6 @@ contains
           mn_phys%albdirnir_lnd(i,j)   = IPD_Data(nb)%Sfcprop%albdirnir_lnd(ix)
           mn_phys%albdifvis_lnd(i,j)   = IPD_Data(nb)%Sfcprop%albdifvis_lnd(ix)
           mn_phys%albdifnir_lnd(i,j)   = IPD_Data(nb)%Sfcprop%albdifnir_lnd(ix)
-
-          do nv = 1, IPD_Control%ntot2d
-            mn_phys%phy_f2d(i,j,nv) = IPD_Data(nb)%Tbd%phy_f2d(ix, nv)
-          enddo
-
-          do k = 1, IPD_Control%levs
-            do nv = 1, IPD_Control%ntot3d
-              mn_phys%phy_f3d(i,j,k,nv) = IPD_Data(nb)%Tbd%phy_f3d(ix, k, nv)
-            enddo
-          enddo
 
           ! Cloud prop data has x,y dimensions
           mn_phys%cv(i,j)  = IPD_Data(nb)%Cldprop%cv(ix)
@@ -452,153 +441,208 @@ contains
 
   end subroutine mn_phys_fill_temp_variables
 
-  !>@brief The subroutine 'mn_phys_fill_temp_variables' extracts 1D physics data into a 2D array for nest motion
-  !>@details This subroutine fills in the mn_phys structure on the Atm object with 2D arrays of physics/surface variables.
-  !!  Note that ice variables are not yet handled.
-  subroutine mn_phys_fill_temp_variables_new(Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
-    type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
-    type (block_control_type), target, intent(in)            :: Atm_block         !< Physics block layout
-    type(IPD_control_type), target, intent(in)               :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), target, intent(inout)               :: IPD_Data(:)       !< Physics variable data
-    integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
-    logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
-    integer, intent(in)                                      :: npz               !< Number of vertical levels
+  ! !>@brief The subroutine 'mn_phys_fill_temp_variables' extracts 1D physics data into a 2D array for nest motion
+  ! !>@details This subroutine fills in the mn_phys structure on the Atm object with 2D arrays of physics/surface variables.
+  ! !!  Note that ice variables are not yet handled.
+  ! subroutine mn_phys_fill_temp_variables_new(Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
+  !   type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
+  !   type (block_control_type), target, intent(in)            :: Atm_block         !< Physics block layout
+  !   type(IPD_control_type), target, intent(in)               :: IPD_Control       !< Physics metadata
+  !   type(IPD_data_type), target, intent(inout)               :: IPD_Data(:)       !< Physics variable data
+  !   integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
+  !   logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
+  !   integer, intent(in)                                      :: npz               !< Number of vertical levels
 
-    save_Atm_n => Atm(n)
-    save_Atm_block => Atm_block
-    save_IPD_Control => IPD_Control
-    save_IPD_Data => IPD_Data
+  !   save_Atm_n => Atm(n)
+  !   save_Atm_block => Atm_block
+  !   save_IPD_Control => IPD_Control
+  !   save_IPD_Data => IPD_Data
 
-    call mn_phys_impl(Moving_nest(n)%mn_phys, ACTION_MOVE_FROM_IPD, Atm, Atm_block, IPD_Control, &
-                      IPD_Data, n, child_grid_num, is_fine_pe, npz)
-  end subroutine mn_phys_fill_temp_variables_new
+  !   call mn_phys_impl(Moving_nest(n)%mn_phys, ACTION_MOVE_FROM_IPD, Atm, Atm_block, IPD_Control, &
+  !                     IPD_Data, n, child_grid_num, is_fine_pe, npz)
+  ! end subroutine mn_phys_fill_temp_variables_new
 
-  subroutine mn_phys_impl(mn_phys, action, Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
-    implicit none
-    type(fv_moving_nest_physics_type)                        :: mn_phys
-    integer, intent(in)                                      :: action            !< What are we doing?
-    type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
-    type (block_control_type), target, intent(in)            :: Atm_block         !< Physics block layout
-    type(IPD_control_type), target, intent(in)               :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), target, intent(inout)               :: IPD_Data(:)       !< Physics variable data
-    integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
-    logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
-    integer, intent(in)                                      :: npz               !< Number of vertical levels
+  ! subroutine mn_phys_impl(mn_phys, action, Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
+  !   implicit none
+  !   type(fv_moving_nest_physics_type)                        :: mn_phys
+  !   integer, intent(in)                                      :: action            !< What are we doing?
+  !   type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
+  !   type (block_control_type), target, intent(in)            :: Atm_block         !< Physics block layout
+  !   type(IPD_control_type), target, intent(in)               :: IPD_Control       !< Physics metadata
+  !   type(IPD_data_type), target, intent(inout)               :: IPD_Data(:)       !< Physics variable data
+  !   integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
+  !   logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
+  !   integer, intent(in)                                      :: npz               !< Number of vertical levels
 
-    integer, pointer, dimension(:) :: ii, jj
-    integer :: nb, is, ie, js, je, isc, jsc
-    logical :: to_block
+  !   integer, pointer, dimension(:) :: ii, jj
+  !   integer :: nb, is, ie, js, je, isc, jsc
+  !   logical :: to_block
 
-    is = Atm(n)%bd%is
-    ie = Atm(n)%bd%ie
-    js = Atm(n)%bd%js
-    je = Atm(n)%bd%je
+  !   is = Atm(n)%bd%is
+  !   ie = Atm(n)%bd%ie
+  !   js = Atm(n)%bd%js
+  !   je = Atm(n)%bd%je
 
-    to_block = action == ACTION_MOVE_TO_IPD
+  !   to_block = action == ACTION_MOVE_TO_IPD
 
-    if(to_block) then
-      Atm(n)%ts(is:ie, js:je) = mn_phys%ts(is:ie, js:je)
-    else
-      mn_phys%ts(is:ie, js:je) = Atm(n)%ts(is:ie, js:je)
-    endif 
+  !   if(to_block) then
+  !     Atm(n)%ts(is:ie, js:je) = mn_phys%ts(is:ie, js:je)
+  !   else
+  !     mn_phys%ts(is:ie, js:je) = Atm(n)%ts(is:ie, js:je)
+  !   endif 
 
-    block_loop: do nb = 1, Atm_block%nblks
-      allocate(ii(Atm_block%blksz(nb)))
-      allocate(jj(Atm_block%blksz(nb)))
-      ii=Atm_block%index(nb)%ii - is + 1
-      jj=Atm_block%index(nb)%jj - js + 1
+  !   block_loop: do nb = 1, Atm_block%nblks
+  !     allocate(ii(Atm_block%blksz(nb)))
+  !     allocate(jj(Atm_block%blksz(nb)))
+  !     ii=Atm_block%index(nb)%ii - is + 1
+  !     jj=Atm_block%index(nb)%jj - js + 1
 
-      if_move_physics: if (move_physics) then
-        call copy3Dphys(to_block, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
-        call copy3Dphys(to_block, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
-        call copy3Dphys(to_block, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
+  !     if_move_physics: if (move_physics) then
+  !       call copy3Dphys(to_block, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
+  !       call copy3Dphys(to_block, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
+  !       call copy3Dphys(to_block, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
 
-        call copy2Dphys(to_block, mn_phys%emis_lnd, IPD_Data(nb)%Sfcprop%emis_lnd, ii, jj)
-        call copy2Dphys(to_block, mn_phys%emis_ice, IPD_Data(nb)%Sfcprop%emis_ice, ii, jj)
-        call copy2Dphys(to_block, mn_phys%emis_wat, IPD_Data(nb)%Sfcprop%emis_wat, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%emis_lnd, IPD_Data(nb)%Sfcprop%emis_lnd, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%emis_ice, IPD_Data(nb)%Sfcprop%emis_ice, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%emis_wat, IPD_Data(nb)%Sfcprop%emis_wat, ii, jj)
            
-        !call copy2Dphys(to_block, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
-        !call copy2Dphys(to_block, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
-        !call copy2Dphys(to_block, mn_phys%semis, IPD_Data(nb)%Radtend%semis, ii, jj)
-        !call copy2Dphys(to_block, mn_phys%semisbase, IPD_Data(nb)%Sfcprop%semisbase, ii, jj)
-        !call copy2Dphys(to_block, mn_phys%sfalb, IPD_Data(nb)%Radtend%sfalb, ii, jj)
+  !       !call copy2Dphys(to_block, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
+  !       !call copy2Dphys(to_block, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
+  !       !call copy2Dphys(to_block, mn_phys%semis, IPD_Data(nb)%Radtend%semis, ii, jj)
+  !       !call copy2Dphys(to_block, mn_phys%semisbase, IPD_Data(nb)%Sfcprop%semisbase, ii, jj)
+  !       !call copy2Dphys(to_block, mn_phys%sfalb, IPD_Data(nb)%Radtend%sfalb, ii, jj)
            
-        call copy2Dphys(to_block, mn_phys%albdirvis_lnd, IPD_Data(nb)%Sfcprop%albdirvis_lnd, ii, jj)
-        call copy2Dphys(to_block, mn_phys%albdirnir_lnd, IPD_Data(nb)%Sfcprop%albdirnir_lnd, ii, jj)
-        call copy2Dphys(to_block, mn_phys%albdifnir_lnd, IPD_Data(nb)%Sfcprop%albdifnir_lnd, ii, jj)
-        call copy2Dphys(to_block, mn_phys%albdifvis_lnd, IPD_Data(nb)%Sfcprop%albdifvis_lnd, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%albdirvis_lnd, IPD_Data(nb)%Sfcprop%albdirvis_lnd, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%albdirnir_lnd, IPD_Data(nb)%Sfcprop%albdirnir_lnd, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%albdifnir_lnd, IPD_Data(nb)%Sfcprop%albdifnir_lnd, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%albdifvis_lnd, IPD_Data(nb)%Sfcprop%albdifvis_lnd, ii, jj)
 
-        call copy2Dphys(to_block, mn_phys%u10m, IPD_Data(nb)%IntDiag%u10m, ii, jj)
-        call copy2Dphys(to_block, mn_phys%v10m, IPD_Data(nb)%IntDiag%v10m, ii, jj)
-        call copy2Dphys(to_block, mn_phys%tprcp, IPD_Data(nb)%Sfcprop%tprcp, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%u10m, IPD_Data(nb)%IntDiag%u10m, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%v10m, IPD_Data(nb)%IntDiag%v10m, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%tprcp, IPD_Data(nb)%Sfcprop%tprcp, ii, jj)
 
-        call copy3Dphys(to_block, mn_phys%hprime, IPD_Data(nb)%Sfcprop%hprime, ii, jj)
+  !       call copy3Dphys(to_block, mn_phys%hprime, IPD_Data(nb)%Sfcprop%hprime, ii, jj)
           
-        call copy2Dphys(to_block, mn_phys%lakefrac, IPD_Data(nb)%Sfcprop%lakefrac, ii, jj)
-        call copy2Dphys(to_block, mn_phys%lakedepth, IPD_Data(nb)%Sfcprop%lakedepth, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%lakefrac, IPD_Data(nb)%Sfcprop%lakefrac, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%lakedepth, IPD_Data(nb)%Sfcprop%lakedepth, ii, jj)
            
-        call copy2Dphys(to_block, mn_phys%canopy, IPD_Data(nb)%Sfcprop%canopy, ii, jj)
-        call copy2Dphys(to_block, mn_phys%vegfrac, IPD_Data(nb)%Sfcprop%vfrac, ii, jj)
-        call copy2Dphys(to_block, mn_phys%uustar, IPD_Data(nb)%Sfcprop%uustar, ii, jj)
-        call copy2Dphys(to_block, mn_phys%shdmin, IPD_Data(nb)%Sfcprop%shdmin, ii, jj)
-        call copy2Dphys(to_block, mn_phys%shdmax, IPD_Data(nb)%Sfcprop%shdmax, ii, jj)
-        call copy2Dphys(to_block, mn_phys%zorl, IPD_Data(nb)%Sfcprop%zorl, ii, jj)
-        call copy2Dphys(to_block, mn_phys%zorll, IPD_Data(nb)%Sfcprop%zorll, ii, jj)
-        call copy2Dphys(to_block, mn_phys%zorlwav, IPD_Data(nb)%Sfcprop%zorlwav, ii, jj)
-        call copy2Dphys(to_block, mn_phys%zorlw, IPD_Data(nb)%Sfcprop%zorlw, ii, jj)
-        call copy2Dphys(to_block, mn_phys%usfco, IPD_Data(nb)%Sfcprop%usfco, ii, jj)
-        call copy2Dphys(to_block, mn_phys%vsfco, IPD_Data(nb)%Sfcprop%vsfco, ii, jj)
-        call copy2Dphys(to_block, mn_phys%tsfco, IPD_Data(nb)%Sfcprop%tsfco, ii, jj)
-        call copy2Dphys(to_block, mn_phys%tsfcl, IPD_Data(nb)%Sfcprop%tsfcl, ii, jj)
-        call copy2Dphys(to_block, mn_phys%tsfc, IPD_Data(nb)%Sfcprop%tsfc, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%canopy, IPD_Data(nb)%Sfcprop%canopy, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%vegfrac, IPD_Data(nb)%Sfcprop%vfrac, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%uustar, IPD_Data(nb)%Sfcprop%uustar, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%shdmin, IPD_Data(nb)%Sfcprop%shdmin, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%shdmax, IPD_Data(nb)%Sfcprop%shdmax, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%zorl, IPD_Data(nb)%Sfcprop%zorl, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%zorll, IPD_Data(nb)%Sfcprop%zorll, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%zorlwav, IPD_Data(nb)%Sfcprop%zorlwav, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%zorlw, IPD_Data(nb)%Sfcprop%zorlw, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%usfco, IPD_Data(nb)%Sfcprop%usfco, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%vsfco, IPD_Data(nb)%Sfcprop%vsfco, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%tsfco, IPD_Data(nb)%Sfcprop%tsfco, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%tsfcl, IPD_Data(nb)%Sfcprop%tsfcl, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%tsfc, IPD_Data(nb)%Sfcprop%tsfc, ii, jj)
 
-        call copy3Dphys(to_block, mn_phys%phy_f2d, IPD_Data(nb)%Tbd%phy_f2d, ii, jj)
-        call copy4Dphys(to_block, mn_phys%phy_f3d, IPD_Data(nb)%Tbd%phy_f3d, ii, jj)
+  !       call copy3Dphys(to_block, mn_phys%phy_f2d, IPD_Data(nb)%Tbd%phy_f2d, ii, jj)
+  !       call copy4Dphys(to_block, mn_phys%phy_f3d, IPD_Data(nb)%Tbd%phy_f3d, ii, jj)
 
-        call copy2Dphys(to_block, mn_phys%cv, IPD_Data(nb)%Cldprop%cv, ii, jj)
-        call copy2Dphys(to_block, mn_phys%cvt, IPD_Data(nb)%Cldprop%cvt, ii, jj)
-        call copy2Dphys(to_block, mn_phys%cvb, IPD_Data(nb)%Cldprop%cvb, ii, jj)
-      endif if_move_physics
+  !       call copy2Dphys(to_block, mn_phys%cv, IPD_Data(nb)%Cldprop%cv, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%cvt, IPD_Data(nb)%Cldprop%cvt, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%cvb, IPD_Data(nb)%Cldprop%cvb, ii, jj)
+  !     endif if_move_physics
 
-      if_move_nsst: if (move_nsst) then
-        call copy2Dphys(to_block, mn_phys%tref, IPD_Data(nb)%Sfcprop%tref, ii, jj)
-        call copy2Dphys(to_block, mn_phys%z_c, IPD_Data(nb)%Sfcprop%z_c, ii, jj)
-        call copy2Dphys(to_block, mn_phys%c_0, IPD_Data(nb)%Sfcprop%c_0, ii, jj)
-        call copy2Dphys(to_block, mn_phys%c_d, IPD_Data(nb)%Sfcprop%c_d, ii, jj)
-        call copy2Dphys(to_block, mn_phys%w_0, IPD_Data(nb)%Sfcprop%w_0, ii, jj)
-        call copy2Dphys(to_block, mn_phys%w_d, IPD_Data(nb)%Sfcprop%w_d, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xt, IPD_Data(nb)%Sfcprop%xt, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xs, IPD_Data(nb)%Sfcprop%xs, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xu, IPD_Data(nb)%Sfcprop%xu, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xv, IPD_Data(nb)%Sfcprop%xv, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xz, IPD_Data(nb)%Sfcprop%xz, ii, jj)
-        call copy2Dphys(to_block, mn_phys%zm, IPD_Data(nb)%Sfcprop%zm, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xtts, IPD_Data(nb)%Sfcprop%xtts, ii, jj)
-        call copy2Dphys(to_block, mn_phys%xzts, IPD_Data(nb)%Sfcprop%xzts, ii, jj)
-        call copy2Dphys(to_block, mn_phys%d_conv, IPD_Data(nb)%Sfcprop%d_conv, ii, jj)
-        call copy2Dphys(to_block, mn_phys%dt_cool, IPD_Data(nb)%Sfcprop%dt_cool, ii, jj)
-        call copy2Dphys(to_block, mn_phys%qrain, IPD_Data(nb)%Sfcprop%qrain, ii, jj)
-      endif if_move_nsst
+  !     if_move_nsst: if (move_nsst) then
+  !       call copy2Dphys(to_block, mn_phys%tref, IPD_Data(nb)%Sfcprop%tref, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%z_c, IPD_Data(nb)%Sfcprop%z_c, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%c_0, IPD_Data(nb)%Sfcprop%c_0, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%c_d, IPD_Data(nb)%Sfcprop%c_d, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%w_0, IPD_Data(nb)%Sfcprop%w_0, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%w_d, IPD_Data(nb)%Sfcprop%w_d, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xt, IPD_Data(nb)%Sfcprop%xt, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xs, IPD_Data(nb)%Sfcprop%xs, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xu, IPD_Data(nb)%Sfcprop%xu, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xv, IPD_Data(nb)%Sfcprop%xv, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xz, IPD_Data(nb)%Sfcprop%xz, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%zm, IPD_Data(nb)%Sfcprop%zm, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xtts, IPD_Data(nb)%Sfcprop%xtts, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%xzts, IPD_Data(nb)%Sfcprop%xzts, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%d_conv, IPD_Data(nb)%Sfcprop%d_conv, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%dt_cool, IPD_Data(nb)%Sfcprop%dt_cool, ii, jj)
+  !       call copy2Dphys(to_block, mn_phys%qrain, IPD_Data(nb)%Sfcprop%qrain, ii, jj)
+  !     endif if_move_nsst
 
-      deallocate(ii)
-      deallocate(jj)
-    enddo block_loop
+  !     deallocate(ii)
+  !     deallocate(jj)
+  !   enddo block_loop
     
-  end subroutine mn_phys_impl
+  ! end subroutine mn_phys_impl
 
-    pure subroutine try2(mn_phys, work_array, block_array, ii, jj)
-      implicit none
-      type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
-      real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:,:)
-      real(kind_phys), intent(inout) :: block_array(:,:)
-      integer, pointer :: ii(:), jj(:)
-      integer :: k, ix
-      do k = lbound(block_array,2), ubound(block_array,2)
-         do ix = 1, size(block_array,1)
-            work_array(ii(ix),jj(ix),k) = block_array(ix,k)
-         enddo
-      enddo
-    end subroutine try2
+  pure subroutine copy4Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+    implicit none
+    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
+    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:,:,:)
+    real(kind_phys), intent(inout) :: block_array(:,:,:)
+    integer, pointer, intent(in) :: ii(:), jj(:)
+    logical, intent(in) :: to_block
+    integer :: m, k, ix
+    if(to_block) then
+       do m = lbound(block_array,3), ubound(block_array,3)
+          do k = lbound(block_array,2), ubound(block_array,2)
+             do ix = 1, size(block_array,1)
+                block_array(ix,k,m) = work_array(ii(ix),jj(ix),k,m)
+             enddo
+          enddo
+       enddo
+    else
+       do m = lbound(block_array,3), ubound(block_array,3)
+          do k = lbound(block_array,2), ubound(block_array,2)
+             do ix = 1, size(block_array,1)
+                work_array(ii(ix),jj(ix),k,m) = block_array(ix,k,m)
+             enddo
+          enddo
+       enddo
+    endif
+  end subroutine copy4Dphys
+
+  pure subroutine copy3Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+    implicit none
+    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
+    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:,:)
+    real(kind_phys), intent(inout) :: block_array(:,:)
+    integer, pointer, intent(in) :: ii(:), jj(:)
+    logical, intent(in) :: to_block
+    integer :: k, ix
+    if(to_block) then
+       do k = lbound(block_array,2), ubound(block_array,2)
+          do ix = 1, size(block_array,1)
+             block_array(ix,k) = work_array(ii(ix),jj(ix),k)
+          enddo
+       enddo
+    else
+       do k = lbound(block_array,2), ubound(block_array,2)
+          do ix = 1, size(block_array,1)
+             work_array(ii(ix),jj(ix),k) = block_array(ix,k)
+          enddo
+       enddo
+    endif
+  end subroutine copy3Dphys
+
+  pure subroutine copy2Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+    implicit none
+    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
+    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:)
+    real(kind_phys), intent(inout) :: block_array(:)
+    integer, pointer, intent(in) :: ii(:), jj(:)
+    logical, intent(in) :: to_block
+    integer :: ix
+    if(to_block) then
+       do ix = 1, size(block_array,1)
+          block_array(ix) = work_array(ii(ix),jj(ix))
+       enddo
+    else
+       do ix = 1, size(block_array,1)
+          work_array(ii(ix),jj(ix)) = block_array(ix)
+       enddo
+    endif
+  end subroutine copy2Dphys
 
   !>@brief The subroutine 'mn_phys_fill_temp_variables' extracts 1D physics data into a 2D array for nest motion
   !>@details This subroutine fills in the mn_phys structure on the Atm object with 2D arrays of physics/surface variables.
