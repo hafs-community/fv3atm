@@ -462,18 +462,54 @@ contains
     endif
   end subroutine copy3Dphys
 
-  pure subroutine copy2Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+  pure subroutine copy2Dphys(to_block, mn_phys, work_array, block_array, ii, jj, &
+       slmsk, if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     implicit none
     type(fv_moving_nest_physics_type), intent(in) :: mn_phys
     real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:)
     real(kind_phys), intent(inout) :: block_array(:)
     integer, pointer, intent(in) :: ii(:), jj(:)
     logical, intent(in) :: to_block
+    real(kind_phys), optional, intent(in) :: slmsk(:)
+    real(kind_phys), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
     integer :: ix
     if(to_block) then
        do ix = 1, size(block_array,1)
           block_array(ix) = work_array(ii(ix),jj(ix))
        enddo
+
+       ! Handle missing values. Generally, only one of these blocks will be reached,
+       ! but the logic should work for any combination.
+       ! Note that sea/land filters require slmsk or they'll crash when accessing it.
+
+       if(present(if_missing)) then
+          do ix = 1, size(block_array,1)
+             if(block_array(ix) .gt. 1e6) then
+                block_array(ix)   = if_missing
+             endif
+          enddo
+       endif
+       if(present(if_missing_on_sea)) then
+          do ix = 1, size(block_array,1)
+             if(nint(slmsk(ix)) .eq. 0 .and. block_array(ix) .gt. 1e6) then
+                block_array(ix)   = if_missing_on_sea
+             endif
+          enddo
+       endif
+       if(present(if_missing_on_land)) then
+          do ix = 1, size(block_array,1)
+             if(nint(slmsk(ix)) .eq. 1 .and. block_array(ix) .gt. 1e6) then
+                block_array(ix)   = if_missing_on_land
+             endif
+          enddo
+       endif
+       if(present(if_negative)) then
+          do ix = 1, size(block_array,1)
+             if(block_array(ix) .lt. 0.0) then
+                block_array(ix)   = if_negative
+             endif
+          enddo
+       endif
     else
        do ix = 1, size(block_array,1)
           work_array(ii(ix),jj(ix)) = block_array(ix)
@@ -499,6 +535,7 @@ contains
     integer :: nb, blen, i, j ,k, ix, nv
     type(fv_moving_nest_physics_type), pointer       :: mn_phys
     integer, pointer :: ii(:), jj(:)
+    real(kind_phys), pointer :: slmsk(:)
     logical :: to_block
 
     this_pe = mpp_pe()
@@ -520,12 +557,20 @@ contains
       block_loop: do nb = 1, Atm_block%nblks
          ii => Atm_block%index(nb)%ii
          jj => Atm_block%index(nb)%jj
+         slmsk => IPD_Data(nb)%Sfcprop%slmsk
 
          if (move_physics) then
            call copy3Dphys(to_block, mn_phys, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
            call copy3Dphys(to_block, mn_phys, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
            call copy3Dphys(to_block, mn_phys, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
 
+           ! EMIS PATCH - Force to positive at all locations.
+           call copy2Dphys(to_block, mn_phys, mn_phys%emis_lnd, IPD_Data(nb)%Sfcprop%emis_lnd, ii, jj, &
+                if_negative=0.5_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%emis_ice, IPD_Data(nb)%Sfcprop%emis_ice, ii, jj, &
+                if_negative=0.5_kind_phys)
+           call copy2Dphys(to_block, mn_phys, mn_phys%emis_wat, IPD_Data(nb)%Sfcprop%emis_wat, ii, jj, &
+                if_negative=0.5_kind_phys)
 
            !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
            !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
@@ -588,22 +633,6 @@ contains
           j = Atm_block%index(nb)%jj(ix)
 
           if (move_physics) then
-            ! EMIS PATCH - Force to positive at all locations.
-            if (mn_phys%emis_lnd(i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%emis_lnd(ix) = mn_phys%emis_lnd(i,j)
-            else
-              IPD_Data(nb)%Sfcprop%emis_lnd(ix) = 0.5
-            endif
-            if (mn_phys%emis_ice(i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%emis_ice(ix) = mn_phys%emis_ice(i,j)
-            else
-              IPD_Data(nb)%Sfcprop%emis_ice(ix) = 0.5
-            endif
-            if (mn_phys%emis_wat(i,j) .ge. 0.0) then
-              IPD_Data(nb)%Sfcprop%emis_wat(ix) = mn_phys%emis_wat(i,j)
-            else
-              IPD_Data(nb)%Sfcprop%emis_wat(ix) = 0.5
-            endif
 
             ! Set roughness lengths to physically reasonable values if they have fill value (possible at coastline)
             ! sea/land mask array (sea:0,land:1,sea-ice:2)
