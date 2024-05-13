@@ -526,11 +526,59 @@ contains
            call copy3Dphys(to_block, mn_phys, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
            call copy3Dphys(to_block, mn_phys, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
 
+
+           !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
+           !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
+           !call copy2Dphys(to_block, mn_phys, mn_phys%semis, IPD_Data(nb)%Radtend%semis, ii, jj)
+           !call copy2Dphys(to_block, mn_phys, mn_phys%semisbase, IPD_Data(nb)%Sfcprop%semisbase, ii, jj)
+           !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb, IPD_Data(nb)%Radtend%sfalb, ii, jj)
+
+           call copy2Dphys(to_block, mn_phys, mn_phys%u10m, IPD_Data(nb)%IntDiag%u10m, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%v10m, IPD_Data(nb)%IntDiag%v10m, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%tprcp, IPD_Data(nb)%Sfcprop%tprcp, ii, jj)
+
            call copy3Dphys(to_block, mn_phys, mn_phys%hprime, IPD_Data(nb)%Sfcprop%hprime, ii, jj)
+
+           call copy2Dphys(to_block, mn_phys, mn_phys%lakefrac, IPD_Data(nb)%Sfcprop%lakefrac, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%lakedepth, IPD_Data(nb)%Sfcprop%lakedepth, ii, jj)
+
+           call copy2Dphys(to_block, mn_phys, mn_phys%canopy, IPD_Data(nb)%Sfcprop%canopy, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%vegfrac, IPD_Data(nb)%Sfcprop%vfrac, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%uustar, IPD_Data(nb)%Sfcprop%uustar, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%shdmin, IPD_Data(nb)%Sfcprop%shdmin, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%shdmax, IPD_Data(nb)%Sfcprop%shdmax, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%tsfco, IPD_Data(nb)%Sfcprop%tsfco, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%tsfcl, IPD_Data(nb)%Sfcprop%tsfcl, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%tsfc, IPD_Data(nb)%Sfcprop%tsfc, ii, jj)
 
            call copy3Dphys(to_block, mn_phys, mn_phys%phy_f2d, IPD_Data(nb)%Tbd%phy_f2d, ii, jj)
            call copy4Dphys(to_block, mn_phys, mn_phys%phy_f3d, IPD_Data(nb)%Tbd%phy_f3d, ii, jj)
-         endif
+ 
+           ! Cloud properties
+           call copy2Dphys(to_block, mn_phys, mn_phys%cv, IPD_Data(nb)%Cldprop%cv, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%cvt, IPD_Data(nb)%Cldprop%cvt, ii, jj)
+           call copy2Dphys(to_block, mn_phys, mn_phys%cvb, IPD_Data(nb)%Cldprop%cvb, ii, jj)
+        endif
+
+        if (move_nsst) then
+          call copy2Dphys(to_block, mn_phys, mn_phys%tref, IPD_Data(nb)%Sfcprop%tref, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%z_c, IPD_Data(nb)%Sfcprop%z_c, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%c_0, IPD_Data(nb)%Sfcprop%c_0, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%c_d, IPD_Data(nb)%Sfcprop%c_d, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%w_0, IPD_Data(nb)%Sfcprop%w_0, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%w_d, IPD_Data(nb)%Sfcprop%w_d, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xt, IPD_Data(nb)%Sfcprop%xt, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xs, IPD_Data(nb)%Sfcprop%xs, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xu, IPD_Data(nb)%Sfcprop%xu, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xv, IPD_Data(nb)%Sfcprop%xv, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xz, IPD_Data(nb)%Sfcprop%xz, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%zm, IPD_Data(nb)%Sfcprop%zm, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xtts, IPD_Data(nb)%Sfcprop%xtts, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%xzts, IPD_Data(nb)%Sfcprop%xzts, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%d_conv, IPD_Data(nb)%Sfcprop%d_conv, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%dt_cool, IPD_Data(nb)%Sfcprop%dt_cool, ii, jj)
+          call copy2Dphys(to_block, mn_phys, mn_phys%qrain, IPD_Data(nb)%Sfcprop%qrain, ii, jj)
+        endif
       enddo block_loop
 
       do nb = 1,Atm_block%nblks
@@ -540,10 +588,6 @@ contains
           j = Atm_block%index(nb)%jj(ix)
 
           if (move_physics) then
-            ! Surface properties
-            do k = 1, IPD_Control%lsoil
-            enddo
-
             ! EMIS PATCH - Force to positive at all locations.
             if (mn_phys%emis_lnd(i,j) .ge. 0.0) then
               IPD_Data(nb)%Sfcprop%emis_lnd(ix) = mn_phys%emis_lnd(i,j)
@@ -560,26 +604,6 @@ contains
             else
               IPD_Data(nb)%Sfcprop%emis_wat(ix) = 0.5
             endif
-
-            !IPD_Data(nb)%Sfcprop%sfalb_lnd(ix) = mn_phys%sfalb_lnd(i,j)
-            !IPD_Data(nb)%Sfcprop%sfalb_lnd_bck(ix) = mn_phys%sfalb_lnd_bck(i,j)
-            !IPD_Data(nb)%Radtend%semis(ix) = mn_phys%semis(i,j)
-            !IPD_Data(nb)%Sfcprop%semisbase(ix) = mn_phys%semisbase(i,j)
-            !IPD_Data(nb)%Radtend%sfalb(ix) = mn_phys%sfalb(i,j)
-
-            IPD_Data(nb)%IntDiag%u10m(ix) = mn_phys%u10m(i,j)
-            IPD_Data(nb)%IntDiag%v10m(ix) = mn_phys%v10m(i,j)
-            IPD_Data(nb)%Sfcprop%tprcp(ix) = mn_phys%tprcp(i,j)
-
-
-            IPD_Data(nb)%Sfcprop%lakefrac(ix) = mn_phys%lakefrac(i,j)
-            IPD_Data(nb)%Sfcprop%lakedepth(ix) = mn_phys%lakedepth(i,j)
-
-            IPD_Data(nb)%Sfcprop%canopy(ix) = mn_phys%canopy(i,j)
-            IPD_Data(nb)%Sfcprop%vfrac(ix)  = mn_phys%vegfrac(i,j)
-            IPD_Data(nb)%Sfcprop%uustar(ix) = mn_phys%uustar(i,j)
-            IPD_Data(nb)%Sfcprop%shdmin(ix) = mn_phys%shdmin(i,j)
-            IPD_Data(nb)%Sfcprop%shdmax(ix) = mn_phys%shdmax(i,j)
 
             ! Set roughness lengths to physically reasonable values if they have fill value (possible at coastline)
             ! sea/land mask array (sea:0,land:1,sea-ice:2)
@@ -618,10 +642,6 @@ contains
               IPD_Data(nb)%Sfcprop%vsfco(ix)  = mn_phys%vsfco(i,j)
             endif
 
-            IPD_Data(nb)%Sfcprop%tsfco(ix)  = mn_phys%tsfco(i,j)
-            IPD_Data(nb)%Sfcprop%tsfcl(ix)  = mn_phys%tsfcl(i,j)
-            IPD_Data(nb)%Sfcprop%tsfc(ix)   = mn_phys%tsfc(i,j)
-
             ! Set albedo values to physically reasonable values if they have negative fill values.
             if (mn_phys%albdirvis_lnd (i,j) .ge. 0.0) then
               IPD_Data(nb)%Sfcprop%albdirvis_lnd (ix)   = mn_phys%albdirvis_lnd (i,j)
@@ -646,33 +666,8 @@ contains
             else
               IPD_Data(nb)%Sfcprop%albdifnir_lnd (ix)   = 0.5
             endif
-
-            ! Cloud properties
-            IPD_Data(nb)%Cldprop%cv(ix) = mn_phys%cv(i,j)
-            IPD_Data(nb)%Cldprop%cvt(ix) = mn_phys%cvt(i,j)
-            IPD_Data(nb)%Cldprop%cvb(ix) = mn_phys%cvb(i,j)
-
           endif
 
-          if (move_nsst) then
-            IPD_Data(nb)%Sfcprop%tref(ix)    = mn_phys%tref(i,j)
-            IPD_Data(nb)%Sfcprop%z_c(ix)     = mn_phys%z_c(i,j)
-            IPD_Data(nb)%Sfcprop%c_0(ix)     = mn_phys%c_0(i,j)
-            IPD_Data(nb)%Sfcprop%c_d(ix)     = mn_phys%c_d(i,j)
-            IPD_Data(nb)%Sfcprop%w_0(ix)     = mn_phys%w_0(i,j)
-            IPD_Data(nb)%Sfcprop%w_d(ix)     = mn_phys%w_d(i,j)
-            IPD_Data(nb)%Sfcprop%xt(ix)      = mn_phys%xt(i,j)
-            IPD_Data(nb)%Sfcprop%xs(ix)      = mn_phys%xs(i,j)
-            IPD_Data(nb)%Sfcprop%xu(ix)      = mn_phys%xu(i,j)
-            IPD_Data(nb)%Sfcprop%xv(ix)      = mn_phys%xv(i,j)
-            IPD_Data(nb)%Sfcprop%xz(ix)      = mn_phys%xz(i,j)
-            IPD_Data(nb)%Sfcprop%zm(ix)      = mn_phys%zm(i,j)
-            IPD_Data(nb)%Sfcprop%xtts(ix)    = mn_phys%xtts(i,j)
-            IPD_Data(nb)%Sfcprop%xzts(ix)    = mn_phys%xzts(i,j)
-            IPD_Data(nb)%Sfcprop%d_conv(ix)  = mn_phys%d_conv(i,j)
-            IPD_Data(nb)%Sfcprop%dt_cool(ix) = mn_phys%dt_cool(i,j)
-            IPD_Data(nb)%Sfcprop%qrain(ix)   = mn_phys%qrain(i,j)
-          endif
 
           ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
           if ( (int(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 1) )  then
