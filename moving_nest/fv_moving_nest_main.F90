@@ -171,7 +171,7 @@ contains
   !>@details This subroutine evaluates the automatic storm tracker (or prescribed motion configuration), then decides
   !!  if the nest should be moved.  If it should be moved, it calls fv_moving_nest_exec() to perform the nest move.
   subroutine update_moving_nest(Atm_block, IPD_control, IPD_data, time_step)
-    type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
+    type(block_control_type), intent(inout):: Atm_block     !< Physics block layout
     type(IPD_control_type), intent(in)   :: IPD_control   !< Physics metadata
     type(IPD_data_type), intent(inout)   :: IPD_data(:)   !< Physics variable data
     type(time_type), intent(in)          :: time_step     !< Current timestep
@@ -486,7 +486,7 @@ contains
   subroutine fv_moving_nest_exec(Atm, Atm_block, IPD_control, IPD_data, delta_i_c, delta_j_c, n, nest_num, parent_grid_num, child_grid_num, dt_atmos)
     implicit none
     type(fv_atmos_type), allocatable, target, intent(inout) :: Atm(:)                !< Atmospheric variables
-    type(block_control_type), intent(in)                    :: Atm_block             !< Physics block
+    type(block_control_type), intent(inout)                 :: Atm_block             !< Physics block
     type(IPD_control_type), intent(in)                      :: IPD_control           !< Physics metadata
     type(IPD_data_type), intent(inout)                      :: IPD_data(:)           !< Physics variable data
     integer, intent(in)                                     :: delta_i_c, delta_j_c  !< Nest motion increments
