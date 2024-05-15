@@ -804,8 +804,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1))
@@ -824,8 +824,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1))
@@ -845,8 +845,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je,1:nz))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je,1:nz))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1,1))
@@ -865,8 +865,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je,1:nz))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je,1:nz))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1,1))
@@ -885,8 +885,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je, 1:nz, 1:n4d))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je, 1:nz, 1:n4d))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1,1,1))
@@ -905,8 +905,8 @@ contains
 
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
-    if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
-      allocate(buffer(bbox_coarse.is:bbox_coarse.ie, bbox_coarse.js:bbox_coarse.je, 1:nz, 1:n4d))
+    if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
+      allocate(buffer(bbox_coarse%is:bbox_coarse%ie, bbox_coarse%js:bbox_coarse%je, 1:nz, 1:n4d))
     else
       ! The buffer must have some storage allocated, whether it's a useful buffer or just a dummy.
       allocate(buffer(1,1,1,1))
