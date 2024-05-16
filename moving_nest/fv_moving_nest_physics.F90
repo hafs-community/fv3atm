@@ -130,7 +130,7 @@ module fv_moving_nest_physics_mod
   end type movement_info
 
   interface mover
-     module procedure mover_r4_2d, mover_r8_2d, mover_r4_3d, mover_r8_3d, mover_r4_4d, mover_r8_4d
+     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_r8_2d_masked
   end interface mover
 
 #include <fms_platform.h>
@@ -600,24 +600,26 @@ contains
     enddo block_loop
   end subroutine mn_phys_block_copy
 
-
-  subroutine mover_r4_2d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
+  subroutine mover_r8_2d_masked(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type, &
+                                slmsk_val, default_val)
     implicit none
     integer, intent(in) :: action, interp_type
     character(len=*), intent(in) :: name
     type(fv_moving_nest_physics_type), intent(in) :: mn_phys
     type(fv_atmos_type), target, intent(in)  :: ChildGrid
-    real(kind=4), allocatable, intent(inout) :: var(:,:)
+    real(kind=8), allocatable, intent(inout) :: var(:,:)
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
+    integer, intent(in)                         :: slmsk_val
+    real(kind=8), intent(in)                          :: default_val
 
     if(action == DO_FILL_NEST_HALOS_FROM_PARENT) then
-       call fill_nest_halos_from_parent(name, var, interp_type, ChildGrid%neststruct%wt_h, & ! mover_r4_2d
+       call fill_nest_halos_from_parent_masked(name, var, interp_type, ChildGrid%neststruct%wt_h, & ! mover_r8_2d_maksed
             ChildGrid%neststruct%ind_h, &
             ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
-            is_fine_pe, nest_domain, CENTER)
+            is_fine_pe, nest_domain, CENTER, mn_phys%slmsk, slmsk_val, default_val)
     endif
-  end subroutine mover_r4_2d
+  end subroutine mover_r8_2d_masked
 
   subroutine mover_r8_2d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
     implicit none
@@ -637,31 +639,31 @@ contains
     endif
   end subroutine mover_r8_2d
 
-  subroutine mover_r4_3d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
+  subroutine mover_r4_2d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
     implicit none
     integer, intent(in) :: action, interp_type
     character(len=*), intent(in) :: name
     type(fv_moving_nest_physics_type), intent(in) :: mn_phys
     type(fv_atmos_type), target, intent(in)  :: ChildGrid
-    real(kind=4), allocatable, intent(inout) :: var(:,:,:)
+    real(kind=4), allocatable, intent(inout) :: var(:,:)
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
 
     if(action == DO_FILL_NEST_HALOS_FROM_PARENT) then
-       call fill_nest_halos_from_parent(name, var, interp_type, ChildGrid%neststruct%wt_h, & ! mover_r4_3d
+       call fill_nest_halos_from_parent(name, var, interp_type, ChildGrid%neststruct%wt_h, & ! mover_r8_2d
             ChildGrid%neststruct%ind_h, &
             ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
-            is_fine_pe, nest_domain, CENTER, size(var,3))
+            is_fine_pe, nest_domain, CENTER)
     endif
-  end subroutine mover_r4_3d
+  end subroutine mover_r4_2d
 
-  subroutine mover_r8_3d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
+  subroutine mover_phys_3d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
     implicit none
     integer, intent(in) :: action, interp_type
     character(len=*), intent(in) :: name
     type(fv_moving_nest_physics_type), intent(in) :: mn_phys
     type(fv_atmos_type), target, intent(in)  :: ChildGrid
-    real(kind=8), allocatable, intent(inout) :: var(:,:,:)
+    real(kind=kind_phys), allocatable, intent(inout) :: var(:,:,:)
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
 
@@ -671,15 +673,15 @@ contains
             ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
             is_fine_pe, nest_domain, CENTER, size(var,3))
     endif
-  end subroutine mover_r8_3d
+  end subroutine mover_phys_3d
 
-  subroutine mover_r4_4d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
+  subroutine mover_phys_4d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
     implicit none
     integer, intent(in) :: action, interp_type
     character(len=*), intent(in) :: name
     type(fv_moving_nest_physics_type), intent(in) :: mn_phys
     type(fv_atmos_type), target, intent(in)  :: ChildGrid
-    real(kind=4), allocatable, intent(inout) :: var(:,:,:,:)
+    real(kind=kind_phys), allocatable, intent(inout) :: var(:,:,:,:)
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
 
@@ -689,25 +691,7 @@ contains
             ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
             is_fine_pe, nest_domain, CENTER, size(var,3))
     endif
-  end subroutine mover_r4_4d
-
-  subroutine mover_r8_4d(mn_phys, action, name, var, ChildGrid, nest_domain, is_fine_pe, interp_type)
-    implicit none
-    integer, intent(in) :: action, interp_type
-    character(len=*), intent(in) :: name
-    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
-    type(fv_atmos_type), target, intent(in)  :: ChildGrid
-    real(kind=8), allocatable, intent(inout) :: var(:,:,:,:)
-    logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
-    type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
-
-    if(action == DO_FILL_NEST_HALOS_FROM_PARENT) then
-       call fill_nest_halos_from_parent(name, var, interp_type, ChildGrid%neststruct%wt_h, & ! mover_r8_4d
-            ChildGrid%neststruct%ind_h, &
-            ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
-            is_fine_pe, nest_domain, CENTER, size(var,3))
-    endif
-  end subroutine mover_r8_4d
+  end subroutine mover_phys_4d
 
 
   !>@brief The subroutine 'mn_physfill_nest_halos_from_parent' transfers data from the coarse grid to the nest edge
@@ -719,7 +703,7 @@ contains
     type(mn_surface_grids), intent(in)                       :: mn_static         !< Static data
     integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
-    type(nest_domain_type), intent(inout)                    :: nest_domain       !< Nest domain for FMS
+    type(nest_domain_type), target, intent(inout)            :: nest_domain       !< Nest domain for FMS
     integer, intent(in)                                      :: nz                !< Number of vertical levels
 
     integer  :: position, position_u, position_v
@@ -746,17 +730,7 @@ contains
 
     !  Fill centered-grid variables
 
-       ! call fill_nest_halos_from_parent('ts', mn_phys%ts, interp_type, ChildGrid%neststruct%wt_h, &
-       !      ChildGrid%neststruct%ind_h, &
-       !      ChildGrid%neststruct%refinement, ChildGrid%neststruct%refinement, &
-       !      is_fine_pe, nest_domain, CENTER)
-
     call mover(mn_phys, action, 'ts', mn_phys%ts, ChildGrid, nest_domain, is_fine_pe, interp_type)
-
-    ! call fill_nest_halos_from_parent("ts", mn_phys%ts, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-    !     Atm(child_grid_num)%neststruct%ind_h, &
-    !     x_refine, y_refine, &
-    !     is_fine_pe, nest_domain, position)
 
     if (move_physics) then
       call mover(mn_phys, action, "smc", mn_phys%smc, ChildGrid, nest_domain, is_fine_pe, interp_type)
@@ -765,242 +739,82 @@ contains
 
       call mover(mn_phys, action, "phy_f2d", mn_phys%phy_f2d, ChildGrid, nest_domain, is_fine_pe, interp_type)
       call mover(mn_phys, action, "phy_f3d", mn_phys%phy_f3d, ChildGrid, nest_domain, is_fine_pe, interp_type)
-
+! TESTED THROUGH THIS LINE--------------------------------------
       !!  Surface variables
 
-      !call fill_nest_halos_from_parent("sfalb_lnd", mn_phys%sfalb_lnd, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-      !     Atm(child_grid_num)%neststruct%ind_h, &
-      !     x_refine, y_refine, &
-      !     is_fine_pe, nest_domain, position)
+      !call mover(mn_phys, action, "sfalb_lnd", mn_phys%sfalb_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
       ! sea/land mask array (sea:0,land:1,sea-ice:2)
 
-      call fill_nest_halos_from_parent_masked("emis_lnd", mn_phys%emis_lnd, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 0.5D0)
+      call mover(mn_phys, action, "emis_lnd", mn_phys%emis_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 0.5D0)
 
-      call fill_nest_halos_from_parent_masked("emis_ice", mn_phys%emis_ice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 2, 0.5D0)
+      call mover(mn_phys, action, "emis_ice", mn_phys%emis_ice, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 2, 0.5D0)
 
-      call fill_nest_halos_from_parent_masked("emis_wat", mn_phys%emis_wat, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 0, 0.5D0)
+      call mover(mn_phys, action, "emis_wat", mn_phys%emis_wat, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 0, 0.5D0)
 
-      !call fill_nest_halos_from_parent("sfalb_lnd_bck", mn_phys%sfalb_lnd_bck, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-      !     Atm(child_grid_num)%neststruct%ind_h, &
-      !     x_refine, y_refine, &
-      !     is_fine_pe, nest_domain, position)
+      ! call mover(mn_phys, action, "sfalb_lnd_bck", mn_phys%sfalb_lnd_bck, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      ! call mover(mn_phys, action, "semis", mn_phys%semis, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      ! call mover(mn_phys, action, "semisbase", mn_phys%semisbase, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      ! call mover(mn_phys, action, "sfalb", mn_phys%sfalb, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
 
-      !call fill_nest_halos_from_parent("semis", mn_phys%semis, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-      !     Atm(child_grid_num)%neststruct%ind_h, &
-      !     x_refine, y_refine, &
-      !     is_fine_pe, nest_domain, position)
-      !call fill_nest_halos_from_parent("semisbase", mn_phys%semisbase, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-      !     Atm(child_grid_num)%neststruct%ind_h, &
-      !     x_refine, y_refine, &
-      !     is_fine_pe, nest_domain, position)
-      !call fill_nest_halos_from_parent("sfalb", mn_phys%sfalb, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-      !     Atm(child_grid_num)%neststruct%ind_h, &
-      !     x_refine, y_refine, &
-      !     is_fine_pe, nest_domain, position)
+      call mover(mn_phys, action, "u10m", mn_phys%u10m, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "v10m", mn_phys%v10m, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "tprcp", mn_phys%tprcp, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
+      call mover(mn_phys, action, "hprime", mn_phys%hprime, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
-      call fill_nest_halos_from_parent("u10m", mn_phys%u10m, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("v10m", mn_phys%v10m, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("tprcp", mn_phys%tprcp, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
+      call mover(mn_phys, action, "lakefrac", mn_phys%lakefrac, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "lakedepth", mn_phys%lakedepth, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
-      call fill_nest_halos_from_parent("hprime", mn_phys%hprime, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, IPD_Control%nmtvr)
+      call mover(mn_phys, action, "canopy", mn_phys%canopy, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "vegfrac", mn_phys%vegfrac, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "uustar", mn_phys%uustar, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "shdmin", mn_phys%shdmin, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "shdmax", mn_phys%shdmax, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "zorl", mn_phys%zorl, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
-      call fill_nest_halos_from_parent("lakefrac", mn_phys%lakefrac, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("lakedepth", mn_phys%lakedepth, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
+      call mover(mn_phys, action, "zorll", mn_phys%zorll, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 86.0D0)
+      call mover(mn_phys, action, "zorlwav", mn_phys%zorlwav, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 0, 77.0D0)
+      call mover(mn_phys, action, "zorlw", mn_phys%zorlw, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 0, 78.0D0)
 
-      call fill_nest_halos_from_parent("canopy", mn_phys%canopy, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("vegfrac", mn_phys%vegfrac, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("uustar", mn_phys%uustar, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("shdmin", mn_phys%shdmin, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("shdmax", mn_phys%shdmax, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("zorl", mn_phys%zorl, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
+      call mover(mn_phys, action, "usfco", mn_phys%usfco, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 0, 0.0D0)
+      call mover(mn_phys, action, "vsfco", mn_phys%vsfco, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 0, 0.0D0)
 
-      call fill_nest_halos_from_parent_masked("zorll", mn_phys%zorll, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 86.0D0)
-      call fill_nest_halos_from_parent_masked("zorlwav", mn_phys%zorlwav, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 0, 77.0D0)
-      call fill_nest_halos_from_parent_masked("zorlw", mn_phys%zorlw, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 0, 78.0D0)
+      call mover(mn_phys, action, "tsfco", mn_phys%tsfco, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "tsfcl", mn_phys%tsfcl, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "tsfc", mn_phys%tsfc, ChildGrid, nest_domain, is_fine_pe, interp_type)
 
-      call fill_nest_halos_from_parent_masked("usfco", mn_phys%usfco, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 0, 0.0D0)
-      call fill_nest_halos_from_parent_masked("vsfco", mn_phys%vsfco, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 0, 0.0D0)
-
-      call fill_nest_halos_from_parent("tsfco", mn_phys%tsfco, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("tsfcl", mn_phys%tsfcl, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("tsfc", mn_phys%tsfc, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-
-      call fill_nest_halos_from_parent_masked("albdirvis_lnd", mn_phys%albdirvis_lnd, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 0.5D0)
-      call fill_nest_halos_from_parent_masked("albdirnir_lnd", mn_phys%albdirnir_lnd, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 0.5D0)
-      call fill_nest_halos_from_parent_masked("albdifvis_lnd", mn_phys%albdifvis_lnd, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 0.5D0)
-      call fill_nest_halos_from_parent_masked("albdifnir_lnd", mn_phys%albdifnir_lnd, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, 1, 0.5D0)
+      call mover(mn_phys, action, "albdirvis_lnd", mn_phys%albdirvis_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 0.5D0)
+      call mover(mn_phys, action, "albdirnir_lnd", mn_phys%albdirnir_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 0.5D0)
+      call mover(mn_phys, action, "albdifvis_lnd", mn_phys%albdifvis_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 0.5D0)
+      call mover(mn_phys, action, "albdifnir_lnd", mn_phys%albdifnir_lnd, ChildGrid, nest_domain, is_fine_pe, interp_type_lmask, 1, 0.5D0)
 
 
 
-      call fill_nest_halos_from_parent("cv", mn_phys%cv, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("cvt", mn_phys%cvt, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("cvb", mn_phys%cvb, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
+      call mover(mn_phys, action, "cv", mn_phys%cv, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "cvt", mn_phys%cvt, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "cvb", mn_phys%cvb, ChildGrid, nest_domain, is_fine_pe, interp_type)
     endif
 
     if (move_nsst) then
-
-      call fill_nest_halos_from_parent("tref", mn_phys%tref, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("z_c", mn_phys%z_c, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("c_0", mn_phys%c_0, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("c_d", mn_phys%c_d, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("w_0", mn_phys%w_0, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("w_d", mn_phys%w_d, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xt", mn_phys%xt, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xs", mn_phys%xs, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xu", mn_phys%xu, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xv", mn_phys%xv, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xz", mn_phys%xz, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("zm", mn_phys%zm, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xtts", mn_phys%xtts, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("xzts", mn_phys%xzts, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("d_conv", mn_phys%d_conv, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("dt_cool", mn_phys%dt_cool, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-      call fill_nest_halos_from_parent("qrain", mn_phys%qrain, interp_type, Atm(child_grid_num)%neststruct%wt_h, &
-          Atm(child_grid_num)%neststruct%ind_h, &
-          x_refine, y_refine, &
-          is_fine_pe, nest_domain, position)
-
+      call mover(mn_phys, action, "tref", mn_phys%tref, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "z_c", mn_phys%z_c, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "c_0", mn_phys%c_0, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "c_d", mn_phys%c_d, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "w_0", mn_phys%w_0, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "w_d", mn_phys%w_d, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xt", mn_phys%xt, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xs", mn_phys%xs, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xu", mn_phys%xu, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xv", mn_phys%xv, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xz", mn_phys%xz, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "zm", mn_phys%zm, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xtts", mn_phys%xtts, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "xzts", mn_phys%xzts, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "d_conv", mn_phys%d_conv, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "dt_cool", mn_phys%dt_cool, ChildGrid, nest_domain, is_fine_pe, interp_type)
+      call mover(mn_phys, action, "qrain", mn_phys%qrain, ChildGrid, nest_domain, is_fine_pe, interp_type)
     endif
 
   end subroutine mn_phys_fill_nest_halos_from_parent
