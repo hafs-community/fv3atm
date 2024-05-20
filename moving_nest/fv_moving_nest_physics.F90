@@ -59,12 +59,7 @@ module fv_moving_nest_physics_mod
   use mpp_domains_mod,        only: NORTH, SOUTH, EAST, WEST, CORNER, CENTER
   use mpp_domains_mod,        only: NUPDATE, SUPDATE, EUPDATE, WUPDATE, DGRID_NE
 
-#ifdef GFS_TYPES
-  use GFS_typedefs,           only: IPD_data_type => GFS_data_type, &
-      IPD_control_type => GFS_control_type, kind_phys
-#else
-  use IPD_typedefs,           only: IPD_data_type, IPD_control_type, kind_phys => IPD_kind_phys
-#endif
+  use GFS_typedefs,           only: GFS_data_type, GFS_control_type, kind_phys
   use GFS_init,               only: GFS_grid_populate
 
   use boundary_mod,           only: update_coarse_grid, update_coarse_grid_mpp
@@ -116,12 +111,14 @@ module fv_moving_nest_physics_mod
   ! Persistent variables to enable debug printing after range warnings.
   type (fv_atmos_type), pointer                 :: save_Atm_n
   type (block_control_type), pointer            :: save_Atm_block
-  type(IPD_control_type), pointer               :: save_IPD_Control
-  type(IPD_data_type), pointer                  :: save_IPD_Data(:)
+  type(GFS_control_type), pointer               :: save_GFS_Control
+  type(GFS_data_type), pointer                  :: save_GFS_Data(:)
 
   integer, parameter :: DO_FILL_NEST_HALOS_FROM_PARENT = 1
   integer, parameter :: DO_FILL_INTERN_NEST_HALOS = 2
   integer, parameter :: DO_SHIFT_DATA = 3
+  integer, parameter :: DO_COPY_TO_BLOCK_ARRAYS = 4
+  integer, parameter :: DO_COPY_FROM_BLOCK_ARRAYS = 5
 
   type movement_info
     integer :: action = -1
@@ -130,29 +127,36 @@ module fv_moving_nest_physics_mod
     type(nest_domain_type), pointer :: nest_domain => null()       !< Nest domain for FMS
     type(domain2d), pointer :: domain_fine => null()
     logical :: is_fine_pe = .false.
-    integer :: delta_i_c = 0
-    integer :: delta_j_c = 0
-    integer :: x_refine = 0
-    integer :: y_refine = 0
+    integer :: delta_i_c = -1
+    integer :: delta_j_c = -1
+    integer :: x_refine = -1
+    integer :: y_refine = -1
+    integer :: isd = -1
+    integer :: jsd = -1
+    integer, pointer :: ii(:) => null()
+    integer, pointer :: jj(:) => null()
+    real(kind=kind_phys), pointer :: slmsk(:) => null()
   end type movement_info
 
   interface mover
-     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_r8_2d_masked
+     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_phys_2d_masked
   end interface mover
 
-#include <fms_platform.h>
+  interface block_copy
+     module procedure block_copy_phys_4D, block_copy_phys_3D, block_copy_r4_2D, block_copy_r8_2D
+  end interface block_copy
 
 contains
 
   !>@brief The subroutine 'mn_phys_reset_sfc_props' sets the static surface parameters from the high-resolution input file data
   !>@details This subroutine relies on earlier code reading the data from files into the mn_static data structure
   !!  This subroutine does not yet handle ice points or frac_grid - fractional landfrac/oceanfrac values
-  subroutine mn_phys_reset_sfc_props(Atm, n, mn_static, Atm_block, IPD_data, ioffset, joffset, refine)
+  subroutine mn_phys_reset_sfc_props(Atm, n, mn_static, Atm_block, GFS_data, ioffset, joffset, refine)
     type(fv_atmos_type), intent(inout),allocatable   :: Atm(:)              !< Array of atmospheric data
     integer, intent(in)                              :: n                   !< Current grid number
     type(mn_surface_grids), intent(in)               :: mn_static           !< Static surface data
     type(block_control_type), intent(in)             :: Atm_block           !< Physics block layout
-    type(IPD_data_type), intent(inout)               :: IPD_data(:)         !< Physics variable data
+    type(GFS_data_type), intent(inout)               :: GFS_data(:)         !< Physics variable data
     integer, intent(in)                              :: ioffset, joffset    !< Current nest offset in i,j direction
     integer, intent(in)                              :: refine              !< Nest refinement ratio
 
@@ -181,22 +185,22 @@ contains
         j_idx = (joffset-1)*refine + j_pe
 
         ! Reset the land sea mask from the hires parent data
-        IPD_data(nb)%Sfcprop%slmsk(ix) = mn_static%ls_mask_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%slmsk(ix) = mn_static%ls_mask_grid(i_idx, j_idx)
 
         !  IFD values are 0 for land, and 1 for oceans/lakes -- reverse of the land sea mask
         !  Land Sea Mask has values of 0 for oceans/lakes, 1 for land, 2 for sea ice
         !  TODO figure out what ifd should be for sea ice
         if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 ) then
-          if (move_nsst) IPD_data(nb)%Sfcprop%ifd(ix) = 0         ! Land
-          IPD_data(nb)%Sfcprop%oceanfrac(ix) = 0   ! Land -- TODO permit fractions
-          IPD_data(nb)%Sfcprop%landfrac(ix) = 1    ! Land -- TODO permit fractions
+          if (move_nsst) GFS_data(nb)%Sfcprop%ifd(ix) = 0         ! Land
+          GFS_data(nb)%Sfcprop%oceanfrac(ix) = 0   ! Land -- TODO permit fractions
+          GFS_data(nb)%Sfcprop%landfrac(ix) = 1    ! Land -- TODO permit fractions
         else
-          if (move_nsst) IPD_data(nb)%Sfcprop%ifd(ix) = 1         ! Ocean
-          IPD_data(nb)%Sfcprop%oceanfrac(ix) = 1   ! Ocean -- TODO permit fractions
-          IPD_data(nb)%Sfcprop%landfrac(ix) = 0    ! Ocean -- TODO permit fractions
+          if (move_nsst) GFS_data(nb)%Sfcprop%ifd(ix) = 1         ! Ocean
+          GFS_data(nb)%Sfcprop%oceanfrac(ix) = 1   ! Ocean -- TODO permit fractions
+          GFS_data(nb)%Sfcprop%landfrac(ix) = 0    ! Ocean -- TODO permit fractions
         endif
 
-        IPD_data(nb)%Sfcprop%tg3(ix) = mn_static%deep_soil_temp_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%tg3(ix) = mn_static%deep_soil_temp_grid(i_idx, j_idx)
 
         ! Follow logic from FV3/io/fv3atm_sfc_io.F90
         ! TODO this will need to be more complicated if we support frac_grid
@@ -207,35 +211,35 @@ contains
         !    mn_static%soil_type_grid(i_idx, j_idx) < 0.5) then
         if (mn_static%ls_mask_grid(i_idx, j_idx) .eq. 1 .and. nint(mn_static%land_frac_grid(i_idx, j_idx)) == 0 ) then
           ! Water soil type == lake, etc. -- override the other variables and make this water
-          !!print '("mn_phys_reset_sfc_props LAKE SOIL npe=",I0," x,y=",I0,",",I0," lat=",F10.3," lon=",F10.3)', mpp_pe(), i_idx, j_idx, IPD_data(nb)%Grid%xlat_d(ix), IPD_data(nb)%Grid%xlon_d(ix)-360.0
+          !!print '("mn_phys_reset_sfc_props LAKE SOIL npe=",I0," x,y=",I0,",",I0," lat=",F10.3," lon=",F10.3)', mpp_pe(), i_idx, j_idx, GFS_data(nb)%Grid%xlat_d(ix), GFS_data(nb)%Grid%xlon_d(ix)-360.0
 
-          if (move_nsst) IPD_data(nb)%Sfcprop%ifd(ix) = 1         ! Ocean
-          IPD_data(nb)%Sfcprop%oceanfrac(ix) = 1   ! Ocean -- TODO permit fractions
-          IPD_data(nb)%Sfcprop%landfrac(ix) = 0    ! Ocean -- TODO permit fractions
+          if (move_nsst) GFS_data(nb)%Sfcprop%ifd(ix) = 1         ! Ocean
+          GFS_data(nb)%Sfcprop%oceanfrac(ix) = 1   ! Ocean -- TODO permit fractions
+          GFS_data(nb)%Sfcprop%landfrac(ix) = 0    ! Ocean -- TODO permit fractions
 
-          IPD_data(nb)%Sfcprop%stype(ix) = 0
-          IPD_data(nb)%Sfcprop%slmsk(ix) = 0
+          GFS_data(nb)%Sfcprop%stype(ix) = 0
+          GFS_data(nb)%Sfcprop%slmsk(ix) = 0
         else
-          IPD_data(nb)%Sfcprop%stype(ix) = nint(mn_static%soil_type_grid(i_idx, j_idx))
+          GFS_data(nb)%Sfcprop%stype(ix) = nint(mn_static%soil_type_grid(i_idx, j_idx))
         endif
 
-        !IPD_data(nb)%Sfcprop%vfrac(ix) = mn_static%veg_frac_grid(i_idx, j_idx)
-        IPD_data(nb)%Sfcprop%vtype(ix) = nint(mn_static%veg_type_grid(i_idx, j_idx))
-        IPD_data(nb)%Sfcprop%slope(ix) = nint(mn_static%slope_type_grid(i_idx, j_idx))
-        IPD_data(nb)%Sfcprop%snoalb(ix) = mn_static%max_snow_alb_grid(i_idx, j_idx)
+        !GFS_data(nb)%Sfcprop%vfrac(ix) = mn_static%veg_frac_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%vtype(ix) = nint(mn_static%veg_type_grid(i_idx, j_idx))
+        GFS_data(nb)%Sfcprop%slope(ix) = nint(mn_static%slope_type_grid(i_idx, j_idx))
+        GFS_data(nb)%Sfcprop%snoalb(ix) = mn_static%max_snow_alb_grid(i_idx, j_idx)
 
-        IPD_data(nb)%Sfcprop%facsf(ix) = mn_static%facsf_grid(i_idx, j_idx)
-        IPD_data(nb)%Sfcprop%facwf(ix) = mn_static%facwf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%facsf(ix) = mn_static%facsf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%facwf(ix) = mn_static%facwf_grid(i_idx, j_idx)
 
-        IPD_data(nb)%Sfcprop%alvsf(ix) = mn_static%alvsf_grid(i_idx, j_idx)
-        IPD_data(nb)%Sfcprop%alvwf(ix) = mn_static%alvwf_grid(i_idx, j_idx)
-        IPD_data(nb)%Sfcprop%alnsf(ix) = mn_static%alnsf_grid(i_idx, j_idx)
-        IPD_data(nb)%Sfcprop%alnwf(ix) = mn_static%alnwf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%alvsf(ix) = mn_static%alvsf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%alvwf(ix) = mn_static%alvwf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%alnsf(ix) = mn_static%alnsf_grid(i_idx, j_idx)
+        GFS_data(nb)%Sfcprop%alnwf(ix) = mn_static%alnwf_grid(i_idx, j_idx)
 
         ! Reset the orography in the physics arrays, using the smoothed values from above
         phys_oro =  Atm(n)%phis(i_pe, j_pe) / grav
-        IPD_data(nb)%Sfcprop%oro(ix) = phys_oro
-        IPD_data(nb)%Sfcprop%oro_uf(ix) = phys_oro
+        GFS_data(nb)%Sfcprop%oro(ix) = phys_oro
+        GFS_data(nb)%Sfcprop%oro_uf(ix) = phys_oro
 
       enddo
     enddo
@@ -244,14 +248,14 @@ contains
 
   !>@brief The subroutine 'mn_phys_reset_phys_latlon' sets the lat/lons from the high-resolution input file data
   !>@details This subroutine sets lat/lons of the moved nest, then recalculates all the derived quantities (dx,dy,etc.)
-  subroutine mn_reset_phys_latlon(Atm, n, tile_geo, fp_super_tile_geo, Atm_block, IPD_control, IPD_data)
+  subroutine mn_reset_phys_latlon(Atm, n, tile_geo, fp_super_tile_geo, Atm_block, GFS_control, GFS_data)
     type(fv_atmos_type), allocatable, intent(in)      :: Atm(:)               !< Array of atmospheric data
     integer, intent(in)                  :: n                    !< Current grid number
     type(grid_geometry), intent(in)      :: tile_geo             !< Bounds of this grid
     type(grid_geometry), intent(in)      :: fp_super_tile_geo    !< Bounds of high-resolution parent grid
     type(block_control_type), intent(in) :: Atm_block            !< Physics block layout
-    type(IPD_control_type), intent(in)   :: IPD_control          !< Physics metadata
-    type(IPD_data_type), intent(inout)   :: IPD_data(:)          !< Physics variable data
+    type(GFS_control_type), intent(in)   :: GFS_control          !< Physics metadata
+    type(GFS_data_type), intent(inout)   :: GFS_data(:)          !< Physics variable data
 
     integer :: isc, jsc, iec, jec
     integer :: x, y, fp_i, fp_j
@@ -308,7 +312,7 @@ contains
       enddo
     enddo
 
-    call GFS_grid_populate(IPD_data%Grid, lons, lats, area)
+    call GFS_grid_populate(GFS_data%Grid, lons, lats, area)
 
     deallocate(lats)
     deallocate(lons)
@@ -319,37 +323,35 @@ contains
   !>@brief The subroutine 'mn_phys_fill_temp_variables' extracts 1D physics data into a 2D array for nest motion
   !>@details This subroutine fills in the mn_phys structure on the Atm object with 2D arrays of physics/surface variables.
   !!  Note that ice variables are not yet handled.
-  subroutine mn_phys_fill_temp_variables(Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
+  subroutine mn_phys_fill_temp_variables(Atm, Atm_block, GFS_Control, GFS_Data, n, child_grid_num, is_fine_pe, npz)
     type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
     type (block_control_type), target, intent(inout)         :: Atm_block         !< Physics block layout
-    type(IPD_control_type), target, intent(in)               :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), target, intent(inout)               :: IPD_Data(:)       !< Physics variable data
+    type(GFS_control_type), target, intent(in)               :: GFS_Control       !< Physics metadata
+    type(GFS_data_type), target, intent(inout)               :: GFS_Data(:)       !< Physics variable data
     integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     integer, intent(in)                                      :: npz               !< Number of vertical levels
 
     save_Atm_n => Atm(n)
     save_Atm_block => Atm_block
-    save_IPD_Control => IPD_Control
-    save_IPD_Data => IPD_Data
+    save_GFS_Control => GFS_Control
+    save_GFS_Data => GFS_Data
 
-    call mn_phys_block_copy(Moving_nest(n)%mn_phys, .false., Atm, Atm_block, IPD_Control, IPD_Data, n)
+    call mn_phys_block_copy(Moving_nest(n)%mn_phys, .false., Atm, Atm_block, GFS_Control, GFS_Data, n)
 
   end subroutine mn_phys_fill_temp_variables
 
-  pure subroutine copy4Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+  pure subroutine block_copy_phys_4D(mi, work_array, block_array)
     implicit none
-    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
-    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:,:,:)
+    type(movement_info), intent(in) :: mi
+    real(kind_phys), intent(inout) :: work_array(mi%isd:,mi%jsd:,:,:)
     real(kind_phys), intent(inout) :: block_array(:,:,:)
-    integer, pointer, intent(in) :: ii(:), jj(:)
-    logical, intent(in) :: to_block
     integer :: m, k, ix
-    if(to_block) then
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
        do m = lbound(block_array,3), ubound(block_array,3)
           do k = lbound(block_array,2), ubound(block_array,2)
              do ix = 1, size(block_array,1)
-                block_array(ix,k,m) = work_array(ii(ix),jj(ix),k,m)
+                block_array(ix,k,m) = work_array(mi%ii(ix),mi%jj(ix),k,m)
              enddo
           enddo
        enddo
@@ -357,50 +359,45 @@ contains
        do m = lbound(block_array,3), ubound(block_array,3)
           do k = lbound(block_array,2), ubound(block_array,2)
              do ix = 1, size(block_array,1)
-                work_array(ii(ix),jj(ix),k,m) = block_array(ix,k,m)
+                work_array(mi%ii(ix),mi%jj(ix),k,m) = block_array(ix,k,m)
              enddo
           enddo
        enddo
     endif
-  end subroutine copy4Dphys
+  end subroutine block_copy_phys_4D
 
-  pure subroutine copy3Dphys(to_block, mn_phys, work_array, block_array, ii, jj)
+  pure subroutine block_copy_phys_3D(mi, work_array, block_array)
     implicit none
-    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
-    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:,:)
+    type(movement_info), intent(in) :: mi
+    real(kind_phys), intent(inout) :: work_array(mi%isd:,mi%jsd:,:)
     real(kind_phys), intent(inout) :: block_array(:,:)
-    integer, pointer, intent(in) :: ii(:), jj(:)
-    logical, intent(in) :: to_block
     integer :: k, ix
-    if(to_block) then
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
        do k = lbound(block_array,2), ubound(block_array,2)
           do ix = 1, size(block_array,1)
-             block_array(ix,k) = work_array(ii(ix),jj(ix),k)
+             block_array(ix,k) = work_array(mi%ii(ix),mi%jj(ix),k)
           enddo
        enddo
     else
        do k = lbound(block_array,2), ubound(block_array,2)
           do ix = 1, size(block_array,1)
-             work_array(ii(ix),jj(ix),k) = block_array(ix,k)
+             work_array(mi%ii(ix),mi%jj(ix),k) = block_array(ix,k)
           enddo
        enddo
     endif
-  end subroutine copy3Dphys
+  end subroutine block_copy_phys_3D
 
-  pure subroutine copy2Dphys(to_block, mn_phys, work_array, block_array, ii, jj, &
-       slmsk, if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+  pure subroutine block_copy_r4_2D(mi, work_array, block_array, &
+       if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     implicit none
-    type(fv_moving_nest_physics_type), intent(in) :: mn_phys
-    real(kind_phys), intent(inout) :: work_array(mn_phys%isd:,mn_phys%jsd:)
-    real(kind_phys), intent(inout) :: block_array(:)
-    integer, pointer, intent(in) :: ii(:), jj(:)
-    logical, intent(in) :: to_block
-    real(kind_phys), optional, intent(in) :: slmsk(:)
-    real(kind_phys), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
+    type(movement_info), intent(in) :: mi
+    real(kind=4), intent(inout) :: work_array(mi%isd:,mi%jsd:)
+    real(kind=4), intent(inout) :: block_array(:)
+    real(kind=4), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
     integer :: ix
-    if(to_block) then
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
        do ix = 1, size(block_array,1)
-          block_array(ix) = work_array(ii(ix),jj(ix))
+          block_array(ix) = work_array(mi%ii(ix),mi%jj(ix))
        enddo
 
        ! Handle missing values. Generally, only one of these blocks will be reached,
@@ -408,49 +405,69 @@ contains
        ! Note that sea/land filters require slmsk or they'll crash when accessing it.
 
        if(present(if_missing)) then
-          do ix = 1, size(block_array,1)
-             if(block_array(ix) .gt. 1e6) then
-                block_array(ix)   = if_missing
-             endif
-          enddo
+          where(block_array>1e6)                           block_array = if_missing
        endif
        if(present(if_missing_on_sea)) then
-          do ix = 1, size(block_array,1)
-             if(nint(slmsk(ix)) .eq. 0 .and. block_array(ix) .gt. 1e6) then
-                block_array(ix)   = if_missing_on_sea
-             endif
-          enddo
+          where(nint(mi%slmsk)==0 .and. block_array>1e6)   block_array = if_missing_on_sea
        endif
        if(present(if_missing_on_land)) then
-          do ix = 1, size(block_array,1)
-             if(nint(slmsk(ix)) .eq. 1 .and. block_array(ix) .gt. 1e6) then
-                block_array(ix)   = if_missing_on_land
-             endif
-          enddo
+          where (nint(mi%slmsk)==1 .and. block_array>1e6)  block_array = if_missing_on_land
        endif
        if(present(if_negative)) then
-          do ix = 1, size(block_array,1)
-             if(block_array(ix) .lt. 0.0) then
-                block_array(ix)   = if_negative
-             endif
-          enddo
+          where(block_array<0.0)                           block_array = if_negative
        endif
     else
        do ix = 1, size(block_array,1)
-          work_array(ii(ix),jj(ix)) = block_array(ix)
+          work_array(mi%ii(ix),mi%jj(ix)) = block_array(ix)
        enddo
     endif
-  end subroutine copy2Dphys
+  end subroutine block_copy_r4_2D
+
+  pure subroutine block_copy_r8_2D(mi, work_array, block_array, &
+       if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+    implicit none
+    type(movement_info), intent(in) :: mi
+    real(kind=8), intent(inout) :: work_array(mi%isd:,mi%jsd:)
+    real(kind=8), intent(inout) :: block_array(:)
+    real(kind=8), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
+    integer :: ix
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+       do ix = 1, size(block_array,1)
+          block_array(ix) = work_array(mi%ii(ix),mi%jj(ix))
+       enddo
+
+       ! Handle missing values. Generally, only one of these blocks will be reached,
+       ! but the logic should work for any combination.
+       ! Note that sea/land filters require slmsk or they'll crash when accessing it.
+
+       if(present(if_missing)) then
+          where(block_array>1e6)                           block_array = if_missing
+       endif
+       if(present(if_missing_on_sea)) then
+          where(nint(mi%slmsk)==0 .and. block_array>1e6)   block_array = if_missing_on_sea
+       endif
+       if(present(if_missing_on_land)) then
+          where (nint(mi%slmsk)==1 .and. block_array>1e6)  block_array = if_missing_on_land
+       endif
+       if(present(if_negative)) then
+          where(block_array<0.0)                           block_array = if_negative
+       endif
+    else
+       do ix = 1, size(block_array,1)
+          work_array(mi%ii(ix),mi%jj(ix)) = block_array(ix)
+       enddo
+    endif
+  end subroutine block_copy_r8_2D
 
 
   !>@brief The subroutine 'mn_phys_apply_temp_variables' copies moved 2D data back into 1D physics arryas for nest motion
   !>@details This subroutine fills the 1D physics arrays from the mn_phys structure on the Atm object
   !!  Note that ice variables are not yet handled.
-  subroutine mn_phys_apply_temp_variables(Atm, Atm_block, IPD_Control, IPD_Data, n, child_grid_num, is_fine_pe, npz)
+  subroutine mn_phys_apply_temp_variables(Atm, Atm_block, GFS_Control, GFS_Data, n, child_grid_num, is_fine_pe, npz)
     type(fv_atmos_type), target, intent(inout)               :: Atm(:)            !< Array of atmospheric data
     type (block_control_type), target, intent(inout)         :: Atm_block         !< Physics block layout
-    type(IPD_control_type), intent(in)                       :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), intent(inout)                       :: IPD_Data(:)       !< Physics variable data
+    type(GFS_control_type), intent(in)                       :: GFS_Control       !< Physics metadata
+    type(GFS_data_type), intent(inout)                       :: GFS_Data(:)       !< Physics variable data
     integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
     integer, intent(in)                                      :: npz               !< Number of vertical levels
@@ -458,23 +475,25 @@ contains
     !  Needed to fill the local grids for parent and nest PEs in order to transmit/interpolate data from parent to nest
     !  But only the nest PE's have changed the values with nest motion, so they are the only ones that need to update the original arrays
     if (is_fine_pe) then
-      call mn_phys_block_copy(Moving_nest(n)%mn_phys, .true., Atm, Atm_block, IPD_Control, IPD_Data, n)
+      call mn_phys_block_copy(Moving_nest(n)%mn_phys, .true., Atm, Atm_block, GFS_Control, GFS_Data, n)
     endif
   end subroutine mn_phys_apply_temp_variables
 
-  pure subroutine mn_phys_block_copy(mn_phys, to_block, Atm, Atm_block, IPD_Control, IPD_Data, n)
+  pure subroutine mn_phys_block_copy(mn_phys, to_block, Atm, Atm_block, GFS_Control, GFS_Data, n)
     type(fv_moving_nest_physics_type), intent(inout)         :: mn_phys
     logical, intent(in)                                      :: to_block
     type(fv_atmos_type), intent(inout)                       :: Atm(:)            !< Array of atmospheric data
     type (block_control_type), target, intent(inout)         :: Atm_block         !< Physics block layout
-    type(IPD_control_type), intent(in)                       :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), intent(inout)                       :: IPD_Data(:)       !< Physics variable data
+    type(GFS_control_type), intent(in)                       :: GFS_Control       !< Physics metadata
+    type(GFS_data_type), intent(inout)                       :: GFS_Data(:)       !< Physics variable data
     integer, intent(in)                                      :: n                 !< Current grid number
 
     integer :: is, ie, js, je
     integer :: nb, blen, i, j, ix;
     integer, pointer :: ii(:), jj(:)
     real(kind_phys), pointer :: slmsk(:)
+
+    type(movement_info) :: mi
 
     is = Atm(n)%bd%is
     ie = Atm(n)%bd%ie
@@ -485,99 +504,106 @@ contains
     Atm(n)%ts(is:ie, js:je) =  mn_phys%ts(is:ie, js:je)
 
     block_loop: do nb = 1, Atm_block%nblks
-       ii => Atm_block%index(nb)%ii
-       jj => Atm_block%index(nb)%jj
-       slmsk => IPD_Data(nb)%Sfcprop%slmsk
+       if(to_block) then
+          mi%action = DO_COPY_TO_BLOCK_ARRAYS
+       else
+          mi%action = DO_COPY_FROM_BLOCK_ARRAYS
+       endif
+       mi%isd = mn_phys%isd
+       mi%jsd = mn_phys%jsd
+       mi%ii => Atm_block%index(nb)%ii
+       mi%jj => Atm_block%index(nb)%jj
+       mi%slmsk => GFS_Data(nb)%Sfcprop%slmsk
 
        if_move_physics: if (move_physics) then
-          call copy3Dphys(to_block, mn_phys, mn_phys%smc, IPD_Data(nb)%Sfcprop%smc, ii, jj)
-          call copy3Dphys(to_block, mn_phys, mn_phys%stc, IPD_Data(nb)%Sfcprop%stc, ii, jj)
-          call copy3Dphys(to_block, mn_phys, mn_phys%slc, IPD_Data(nb)%Sfcprop%slc, ii, jj)
+          call block_copy(mi, mn_phys%smc, GFS_Data(nb)%Sfcprop%smc)
+          call block_copy(mi, mn_phys%stc, GFS_Data(nb)%Sfcprop%stc)
+          call block_copy(mi, mn_phys%slc, GFS_Data(nb)%Sfcprop%slc)
 
-          ! EMIS PATCH - When copying back to IPD_Data, force to positive at all locations.
-          call copy2Dphys(to_block, mn_phys, mn_phys%emis_lnd, IPD_Data(nb)%Sfcprop%emis_lnd, ii, jj, &
+          ! EMIS PATCH - When copying back to GFS_Data, force to positive at all locations.
+          call block_copy(mi, mn_phys%emis_lnd, GFS_Data(nb)%Sfcprop%emis_lnd, &
                if_negative=0.5_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%emis_ice, IPD_Data(nb)%Sfcprop%emis_ice, ii, jj, &
+          call block_copy(mi, mn_phys%emis_ice, GFS_Data(nb)%Sfcprop%emis_ice, &
                if_negative=0.5_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%emis_wat, IPD_Data(nb)%Sfcprop%emis_wat, ii, jj, &
-               if_negative=0.5_kind_phys)
-
-          ! When copying back to IPD_Data, set albedo values to physically reasonable values if they have negative fill values.
-          call copy2Dphys(to_block, mn_phys, mn_phys%albdirvis_lnd , IPD_Data(nb)%Sfcprop%albdirvis_lnd , ii, jj, &
-               if_negative=0.5_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%albdirnir_lnd , IPD_Data(nb)%Sfcprop%albdirnir_lnd , ii, jj, &
-               if_negative=0.5_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%albdifvis_lnd , IPD_Data(nb)%Sfcprop%albdifvis_lnd , ii, jj, &
-               if_negative=0.5_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%albdifnir_lnd , IPD_Data(nb)%Sfcprop%albdifnir_lnd , ii, jj, &
+          call block_copy(mi, mn_phys%emis_wat, GFS_Data(nb)%Sfcprop%emis_wat, &
                if_negative=0.5_kind_phys)
 
-          !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd, IPD_Data(nb)%Sfcprop%sfalb_lnd, ii, jj)
-          !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb_lnd_bck, IPD_Data(nb)%Sfcprop%sfalb_lnd_bck, ii, jj)
-          !call copy2Dphys(to_block, mn_phys, mn_phys%semis, IPD_Data(nb)%Radtend%semis, ii, jj)
-          !call copy2Dphys(to_block, mn_phys, mn_phys%semisbase, IPD_Data(nb)%Sfcprop%semisbase, ii, jj)
-          !call copy2Dphys(to_block, mn_phys, mn_phys%sfalb, IPD_Data(nb)%Radtend%sfalb, ii, jj)
+          ! When copying back to GFS_Data, set albedo values to physically reasonable values if they have negative fill values.
+          call block_copy(mi, mn_phys%albdirvis_lnd , GFS_Data(nb)%Sfcprop%albdirvis_lnd , &
+               if_negative=0.5_kind_phys)
+          call block_copy(mi, mn_phys%albdirnir_lnd , GFS_Data(nb)%Sfcprop%albdirnir_lnd , &
+               if_negative=0.5_kind_phys)
+          call block_copy(mi, mn_phys%albdifvis_lnd , GFS_Data(nb)%Sfcprop%albdifvis_lnd , &
+               if_negative=0.5_kind_phys)
+          call block_copy(mi, mn_phys%albdifnir_lnd , GFS_Data(nb)%Sfcprop%albdifnir_lnd , &
+               if_negative=0.5_kind_phys)
 
-          call copy2Dphys(to_block, mn_phys, mn_phys%u10m, IPD_Data(nb)%IntDiag%u10m, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%v10m, IPD_Data(nb)%IntDiag%v10m, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%tprcp, IPD_Data(nb)%Sfcprop%tprcp, ii, jj)
+          !call block_copy(mi, mn_phys%sfalb_lnd, GFS_Data(nb)%Sfcprop%sfalb_lnd)
+          !call block_copy(mi, mn_phys%sfalb_lnd_bck, GFS_Data(nb)%Sfcprop%sfalb_lnd_bck)
+          !call block_copy(mi, mn_phys%semis, GFS_Data(nb)%Radtend%semis)
+          !call block_copy(mi, mn_phys%semisbase, GFS_Data(nb)%Sfcprop%semisbase)
+          !call block_copy(mi, mn_phys%sfalb, GFS_Data(nb)%Radtend%sfalb)
 
-          call copy3Dphys(to_block, mn_phys, mn_phys%hprime, IPD_Data(nb)%Sfcprop%hprime, ii, jj)
+          call block_copy(mi, mn_phys%u10m, GFS_Data(nb)%IntDiag%u10m)
+          call block_copy(mi, mn_phys%v10m, GFS_Data(nb)%IntDiag%v10m)
+          call block_copy(mi, mn_phys%tprcp, GFS_Data(nb)%Sfcprop%tprcp)
 
-          call copy2Dphys(to_block, mn_phys, mn_phys%lakefrac, IPD_Data(nb)%Sfcprop%lakefrac, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%lakedepth, IPD_Data(nb)%Sfcprop%lakedepth, ii, jj)
+          call block_copy(mi, mn_phys%hprime, GFS_Data(nb)%Sfcprop%hprime)
 
-          call copy2Dphys(to_block, mn_phys, mn_phys%canopy, IPD_Data(nb)%Sfcprop%canopy, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%vegfrac, IPD_Data(nb)%Sfcprop%vfrac, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%uustar, IPD_Data(nb)%Sfcprop%uustar, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%shdmin, IPD_Data(nb)%Sfcprop%shdmin, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%shdmax, IPD_Data(nb)%Sfcprop%shdmax, ii, jj)
+          call block_copy(mi, mn_phys%lakefrac, GFS_Data(nb)%Sfcprop%lakefrac)
+          call block_copy(mi, mn_phys%lakedepth, GFS_Data(nb)%Sfcprop%lakedepth)
 
-          ! When copying back to IPD_Data, set roughness lengths to physically reasonable values if they have
+          call block_copy(mi, mn_phys%canopy, GFS_Data(nb)%Sfcprop%canopy)
+          call block_copy(mi, mn_phys%vegfrac, GFS_Data(nb)%Sfcprop%vfrac)
+          call block_copy(mi, mn_phys%uustar, GFS_Data(nb)%Sfcprop%uustar)
+          call block_copy(mi, mn_phys%shdmin, GFS_Data(nb)%Sfcprop%shdmin)
+          call block_copy(mi, mn_phys%shdmax, GFS_Data(nb)%Sfcprop%shdmax)
+
+          ! When copying back to GFS_Data, set roughness lengths to physically reasonable values if they have
           ! fill value (possible at coastline) sea/land mask array (sea:0,land:1,sea-ice:2)
-          call copy2Dphys(to_block, mn_phys, mn_phys%zorll, IPD_Data(nb)%Sfcprop%zorll, ii, jj, &
-               slmsk=slmsk, if_missing_on_land=82.0_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%zorlw, IPD_Data(nb)%Sfcprop%zorlw, ii, jj, &
-               slmsk=slmsk, if_missing_on_sea=83.0_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%zorlwav, IPD_Data(nb)%Sfcprop%zorlwav, ii, jj, &
-               slmsk=slmsk, if_missing_on_sea=84.0_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%zorl, IPD_Data(nb)%Sfcprop%zorl, ii, jj, &
+          call block_copy(mi, mn_phys%zorll, GFS_Data(nb)%Sfcprop%zorll, &
+               if_missing_on_land=82.0_kind_phys)
+          call block_copy(mi, mn_phys%zorlw, GFS_Data(nb)%Sfcprop%zorlw, &
+               if_missing_on_sea=83.0_kind_phys)
+          call block_copy(mi, mn_phys%zorlwav, GFS_Data(nb)%Sfcprop%zorlwav, &
+               if_missing_on_sea=84.0_kind_phys)
+          call block_copy(mi, mn_phys%zorl, GFS_Data(nb)%Sfcprop%zorl, &
                if_missing=85.0_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%usfco, IPD_Data(nb)%Sfcprop%usfco, ii, jj, &
-               slmsk=slmsk, if_missing_on_sea=0.0_kind_phys)
-          call copy2Dphys(to_block, mn_phys, mn_phys%vsfco, IPD_Data(nb)%Sfcprop%vsfco, ii, jj, &
-               slmsk=slmsk, if_missing_on_sea=0.0_kind_phys)
+          call block_copy(mi, mn_phys%usfco, GFS_Data(nb)%Sfcprop%usfco, &
+               if_missing_on_sea=0.0_kind_phys)
+          call block_copy(mi, mn_phys%vsfco, GFS_Data(nb)%Sfcprop%vsfco, &
+               if_missing_on_sea=0.0_kind_phys)
 
-          call copy2Dphys(to_block, mn_phys, mn_phys%tsfco, IPD_Data(nb)%Sfcprop%tsfco, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%tsfcl, IPD_Data(nb)%Sfcprop%tsfcl, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%tsfc, IPD_Data(nb)%Sfcprop%tsfc, ii, jj)
+          call block_copy(mi, mn_phys%tsfco, GFS_Data(nb)%Sfcprop%tsfco)
+          call block_copy(mi, mn_phys%tsfcl, GFS_Data(nb)%Sfcprop%tsfcl)
+          call block_copy(mi, mn_phys%tsfc, GFS_Data(nb)%Sfcprop%tsfc)
 
-          call copy3Dphys(to_block, mn_phys, mn_phys%phy_f2d, IPD_Data(nb)%Tbd%phy_f2d, ii, jj)
-          call copy4Dphys(to_block, mn_phys, mn_phys%phy_f3d, IPD_Data(nb)%Tbd%phy_f3d, ii, jj)
+          call block_copy(mi, mn_phys%phy_f2d, GFS_Data(nb)%Tbd%phy_f2d)
+          call block_copy(mi, mn_phys%phy_f3d, GFS_Data(nb)%Tbd%phy_f3d)
 
-          call copy2Dphys(to_block, mn_phys, mn_phys%cv, IPD_Data(nb)%Cldprop%cv, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%cvt, IPD_Data(nb)%Cldprop%cvt, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%cvb, IPD_Data(nb)%Cldprop%cvb, ii, jj)
+          call block_copy(mi, mn_phys%cv, GFS_Data(nb)%Cldprop%cv)
+          call block_copy(mi, mn_phys%cvt, GFS_Data(nb)%Cldprop%cvt)
+          call block_copy(mi, mn_phys%cvb, GFS_Data(nb)%Cldprop%cvb)
 
-          check_stype_vtype: if(to_block) then
+          check_stype_vtype: if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
              ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
              blen = Atm_block%blksz(nb)
              do ix = 1, blen
-                if ( (int(IPD_data(nb)%Sfcprop%slmsk(ix)) .eq. 1) )  then
+                if ( (int(GFS_data(nb)%Sfcprop%slmsk(ix)) .eq. 1) )  then
 
-                   if (IPD_data(nb)%Sfcprop%vtype(ix) .lt. 0.5) then
-                      IPD_data(nb)%Sfcprop%vtype(ix) = 7    ! Force to grassland
+                   if (GFS_data(nb)%Sfcprop%vtype(ix) .lt. 0.5) then
+                      GFS_data(nb)%Sfcprop%vtype(ix) = 7    ! Force to grassland
                    endif
 
-                   if (IPD_data(nb)%Sfcprop%stype(ix) .lt. 0.5) then
-                      IPD_data(nb)%Sfcprop%stype(ix) = 3    ! Force to sandy loam
+                   if (GFS_data(nb)%Sfcprop%stype(ix) .lt. 0.5) then
+                      GFS_data(nb)%Sfcprop%stype(ix) = 3    ! Force to sandy loam
                    endif
 
-                   if (IPD_data(nb)%Sfcprop%vtype_save(ix) .lt. 0.5) then
-                      IPD_data(nb)%Sfcprop%vtype_save(ix) = 7    ! Force to grassland
+                   if (GFS_data(nb)%Sfcprop%vtype_save(ix) .lt. 0.5) then
+                      GFS_data(nb)%Sfcprop%vtype_save(ix) = 7    ! Force to grassland
                    endif
-                   if (IPD_data(nb)%Sfcprop%stype_save(ix) .lt. 0.5) then
-                      IPD_data(nb)%Sfcprop%stype_save(ix) = 3    ! Force to sandy loam
+                   if (GFS_data(nb)%Sfcprop%stype_save(ix) .lt. 0.5) then
+                      GFS_data(nb)%Sfcprop%stype_save(ix) = 3    ! Force to sandy loam
                    endif
 
                 endif
@@ -586,36 +612,36 @@ contains
        endif if_move_physics
 
        if_move_nsst: if (move_nsst) then
-          call copy2Dphys(to_block, mn_phys, mn_phys%tref, IPD_Data(nb)%Sfcprop%tref, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%z_c, IPD_Data(nb)%Sfcprop%z_c, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%c_0, IPD_Data(nb)%Sfcprop%c_0, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%c_d, IPD_Data(nb)%Sfcprop%c_d, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%w_0, IPD_Data(nb)%Sfcprop%w_0, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%w_d, IPD_Data(nb)%Sfcprop%w_d, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xt, IPD_Data(nb)%Sfcprop%xt, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xs, IPD_Data(nb)%Sfcprop%xs, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xu, IPD_Data(nb)%Sfcprop%xu, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xv, IPD_Data(nb)%Sfcprop%xv, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xz, IPD_Data(nb)%Sfcprop%xz, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%zm, IPD_Data(nb)%Sfcprop%zm, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xtts, IPD_Data(nb)%Sfcprop%xtts, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%xzts, IPD_Data(nb)%Sfcprop%xzts, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%d_conv, IPD_Data(nb)%Sfcprop%d_conv, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%dt_cool, IPD_Data(nb)%Sfcprop%dt_cool, ii, jj)
-          call copy2Dphys(to_block, mn_phys, mn_phys%qrain, IPD_Data(nb)%Sfcprop%qrain, ii, jj)
+          call block_copy(mi, mn_phys%tref, GFS_Data(nb)%Sfcprop%tref)
+          call block_copy(mi, mn_phys%z_c, GFS_Data(nb)%Sfcprop%z_c)
+          call block_copy(mi, mn_phys%c_0, GFS_Data(nb)%Sfcprop%c_0)
+          call block_copy(mi, mn_phys%c_d, GFS_Data(nb)%Sfcprop%c_d)
+          call block_copy(mi, mn_phys%w_0, GFS_Data(nb)%Sfcprop%w_0)
+          call block_copy(mi, mn_phys%w_d, GFS_Data(nb)%Sfcprop%w_d)
+          call block_copy(mi, mn_phys%xt, GFS_Data(nb)%Sfcprop%xt)
+          call block_copy(mi, mn_phys%xs, GFS_Data(nb)%Sfcprop%xs)
+          call block_copy(mi, mn_phys%xu, GFS_Data(nb)%Sfcprop%xu)
+          call block_copy(mi, mn_phys%xv, GFS_Data(nb)%Sfcprop%xv)
+          call block_copy(mi, mn_phys%xz, GFS_Data(nb)%Sfcprop%xz)
+          call block_copy(mi, mn_phys%zm, GFS_Data(nb)%Sfcprop%zm)
+          call block_copy(mi, mn_phys%xtts, GFS_Data(nb)%Sfcprop%xtts)
+          call block_copy(mi, mn_phys%xzts, GFS_Data(nb)%Sfcprop%xzts)
+          call block_copy(mi, mn_phys%d_conv, GFS_Data(nb)%Sfcprop%d_conv)
+          call block_copy(mi, mn_phys%dt_cool, GFS_Data(nb)%Sfcprop%dt_cool)
+          call block_copy(mi, mn_phys%qrain, GFS_Data(nb)%Sfcprop%qrain)
        endif if_move_nsst
     enddo block_loop
   end subroutine mn_phys_block_copy
 
-  subroutine mover_r8_2d_masked(mi, name, var, interp_type, slmsk_val, default_val, wt_h)
+  subroutine mover_phys_2d_masked(mi, name, var, interp_type, slmsk_val, default_val, wt_h)
     implicit none
     type(movement_info), intent(in) :: mi
     integer, intent(in) :: interp_type
     character(len=*), intent(in) :: name
-    real(kind=8), allocatable, intent(inout) :: var(:,:)
+    real(kind_phys), allocatable, intent(inout) :: var(:,:)
     real, allocatable, intent(in), optional :: wt_h(:,:,:)
     integer, intent(in)                         :: slmsk_val
-    real(kind=8), intent(in)                          :: default_val
+    real(kind_phys), intent(in)                          :: default_val
 
     if(mi%action == DO_FILL_NEST_HALOS_FROM_PARENT) then
        call fill_nest_halos_from_parent_masked(name, var, interp_type, mi%ChildGrid%neststruct%wt_h, & ! mover_r8_2d_maksed
@@ -628,7 +654,7 @@ contains
        call mn_var_shift_data(var, 1, wt_h, mi%ChildGrid%neststruct%ind_h, & ! mover_r8_2d_masked
             mi%delta_i_c, mi%delta_j_c, mi%x_refine, mi%y_refine, mi%is_fine_pe, mi%nest_domain, CENTER)
     endif
-  end subroutine mover_r8_2d_masked
+  end subroutine mover_phys_2d_masked
 
   subroutine mover_r8_2d(mi, name, var, interp_type, wt_h)
     implicit none
@@ -677,7 +703,7 @@ contains
     type(movement_info), intent(in) :: mi
     integer, intent(in) :: interp_type
     character(len=*), intent(in) :: name
-    real(kind=kind_phys), allocatable, intent(inout) :: var(:,:,:)
+    real(kind_phys), allocatable, intent(inout) :: var(:,:,:)
     real, allocatable, intent(in), optional :: wt_h(:,:,:)
 
     if(mi%action == DO_FILL_NEST_HALOS_FROM_PARENT) then
@@ -741,9 +767,9 @@ contains
 
       ! sea/land mask array (sea:0,land:1,sea-ice:2)
 
-      call mover(mi, "emis_lnd", mi%mn_phys%emis_lnd, interp_type_lmask, 1, 0.5D0, wt_h=wt_h)
-      call mover(mi, "emis_ice", mi%mn_phys%emis_ice, interp_type_lmask, 2, 0.5D0, wt_h=wt_h)
-      call mover(mi, "emis_wat", mi%mn_phys%emis_wat, interp_type_lmask, 0, 0.5D0, wt_h=wt_h)
+      call mover(mi, "emis_lnd", mi%mn_phys%emis_lnd, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
+      call mover(mi, "emis_ice", mi%mn_phys%emis_ice, interp_type_lmask, 2, 0.5_kind_phys, wt_h=wt_h)
+      call mover(mi, "emis_wat", mi%mn_phys%emis_wat, interp_type_lmask, 0, 0.5_kind_phys, wt_h=wt_h)
 
       !call mover(mi, "sfalb_lnd_bck", mi%mn_phys%sfalb_lnd_bck, interp_type, wt_h=wt_h)
       !call mover(mi, "semis", mi%mn_phys%semis, interp_type, wt_h=wt_h)
@@ -765,19 +791,19 @@ contains
       call mover(mi, "shdmin", mi%mn_phys%shdmin, interp_type, wt_h=wt_h)
       call mover(mi, "shdmax", mi%mn_phys%shdmax, interp_type, wt_h=wt_h)
       call mover(mi, "zorl", mi%mn_phys%zorl, interp_type, wt_h=wt_h)
-      call mover(mi, "zorll", mi%mn_phys%zorll, interp_type_lmask, 1, 86.0D0, wt_h=wt_h)
-      call mover(mi, "zorlwav", mi%mn_phys%zorlwav, interp_type_lmask, 0, 77.0D0, wt_h=wt_h)
-      call mover(mi, "zorlw", mi%mn_phys%zorlw, interp_type_lmask, 0, 78.0D0, wt_h=wt_h)
-      call mover(mi, "usfco", mi%mn_phys%usfco, interp_type_lmask, 0, 0.0D0, wt_h=wt_h)
-      call mover(mi, "vsfco", mi%mn_phys%vsfco, interp_type_lmask, 0, 0.0D0, wt_h=wt_h)
+      call mover(mi, "zorll", mi%mn_phys%zorll, interp_type_lmask, 1, 86.0_kind_phys, wt_h=wt_h)
+      call mover(mi, "zorlwav", mi%mn_phys%zorlwav, interp_type_lmask, 0, 77.0_kind_phys, wt_h=wt_h)
+      call mover(mi, "zorlw", mi%mn_phys%zorlw, interp_type_lmask, 0, 78.0_kind_phys, wt_h=wt_h)
+      call mover(mi, "usfco", mi%mn_phys%usfco, interp_type_lmask, 0, 0.0_kind_phys, wt_h=wt_h)
+      call mover(mi, "vsfco", mi%mn_phys%vsfco, interp_type_lmask, 0, 0.0_kind_phys, wt_h=wt_h)
       call mover(mi, "tsfco", mi%mn_phys%tsfco, interp_type, wt_h=wt_h)
       call mover(mi, "tsfcl", mi%mn_phys%tsfcl, interp_type, wt_h=wt_h)
       call mover(mi, "tsfc", mi%mn_phys%tsfc, interp_type, wt_h=wt_h)
 
-      call mover(mi, "albdirvis_lnd", mi%mn_phys%albdirvis_lnd, interp_type_lmask, 1, 0.5D0, wt_h=wt_h)
-      call mover(mi, "albdirnir_lnd", mi%mn_phys%albdirnir_lnd, interp_type_lmask, 1, 0.5D0, wt_h=wt_h)
-      call mover(mi, "albdifvis_lnd", mi%mn_phys%albdifvis_lnd, interp_type_lmask, 1, 0.5D0, wt_h=wt_h)
-      call mover(mi, "albdifnir_lnd", mi%mn_phys%albdifnir_lnd, interp_type_lmask, 1, 0.5D0, wt_h=wt_h)
+      call mover(mi, "albdirvis_lnd", mi%mn_phys%albdirvis_lnd, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
+      call mover(mi, "albdirnir_lnd", mi%mn_phys%albdirnir_lnd, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
+      call mover(mi, "albdifvis_lnd", mi%mn_phys%albdifvis_lnd, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
+      call mover(mi, "albdifnir_lnd", mi%mn_phys%albdifnir_lnd, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
 
       call mover(mi, "cv", mi%mn_phys%cv, interp_type, wt_h=wt_h)
       call mover(mi, "cvt", mi%mn_phys%cvt, interp_type, wt_h=wt_h)
@@ -807,10 +833,10 @@ contains
 
   !>@brief The subroutine 'mn_physfill_nest_halos_from_parent' transfers data from the coarse grid to the nest edge
   !>@details This subroutine must run on parent and nest PEs to complete the data transfers
-  subroutine mn_phys_fill_nest_halos_from_parent(Atm, IPD_Control, IPD_Data, mn_static, n, child_grid_num, is_fine_pe, nest_domain, nz)
+  subroutine mn_phys_fill_nest_halos_from_parent(Atm, GFS_Control, GFS_Data, mn_static, n, child_grid_num, is_fine_pe, nest_domain, nz)
     type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)            !< Array of atmospheric data
-    type(IPD_control_type), intent(in)                       :: IPD_Control       !< Physics metadata
-    type(IPD_data_type), intent(inout)                       :: IPD_Data(:)       !< Physics variable data
+    type(GFS_control_type), intent(in)                       :: GFS_Control       !< Physics metadata
+    type(GFS_data_type), intent(inout)                       :: GFS_Data(:)       !< Physics variable data
     type(mn_surface_grids), intent(in)                       :: mn_static         !< Static data
     integer, intent(in)                                      :: n, child_grid_num !< Current grid number, child grid number
     logical, intent(in)                                      :: is_fine_pe        !< Is this a nest PE?
@@ -834,10 +860,10 @@ contains
 
   !>@brief The subroutine 'mn_phys_fill_intern_nest_halos' fills the intenal nest halos for the physics variables
   !>@details This subroutine is only called for the nest PEs.
-  subroutine mn_phys_fill_intern_nest_halos(moving_nest, IPD_Control, IPD_Data, domain_fine, is_fine_pe)
+  subroutine mn_phys_fill_intern_nest_halos(moving_nest, GFS_Control, GFS_Data, domain_fine, is_fine_pe)
     type(fv_moving_nest_type), target, intent(inout) :: moving_nest         !< Single instance of moving nest data
-    type(IPD_control_type), intent(in)               :: IPD_Control         !< Physics metadata
-    type(IPD_data_type), intent(inout)               :: IPD_Data(:)         !< Physics variable data
+    type(GFS_control_type), intent(in)               :: GFS_Control         !< Physics metadata
+    type(GFS_data_type), intent(inout)               :: GFS_Data(:)         !< Physics variable data
     type(domain2d), target, intent(inout)            :: domain_fine         !< Domain structure for this nest
     logical, intent(in)                              :: is_fine_pe          !< Is nest PE - should be True.  Argument is redundant.
 
@@ -856,11 +882,11 @@ contains
 
   !>@brief The subroutine 'mn_phys_shift_data' shifts the variable in the nest, including interpolating at the leading edge
   !>@details This subroutine is called for the nest and parent PEs.
-  subroutine mn_phys_shift_data(Atm, IPD_Control, IPD_Data, n, child_grid_num, wt_h, wt_u, wt_v, &
+  subroutine mn_phys_shift_data(Atm, GFS_Control, GFS_Data, n, child_grid_num, wt_h, wt_u, wt_v, &
       delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, nz)
     type(fv_atmos_type), allocatable, target, intent(inout)  :: Atm(:)                  !< Array of atmospheric data
-    type(IPD_control_type), intent(in)                       :: IPD_Control             !< Physics metadata
-    type(IPD_data_type), intent(inout)                       :: IPD_Data(:)             !< Physics variable data
+    type(GFS_control_type), intent(in)                       :: GFS_Control             !< Physics metadata
+    type(GFS_data_type), intent(inout)                       :: GFS_Data(:)             !< Physics variable data
     integer, intent(in)                                      :: n, child_grid_num       !< Current grid number, child grid number
     real, allocatable, intent(in)                            :: wt_h(:,:,:), wt_u(:,:,:), wt_v(:,:,:) !< Interpolation weights
     integer, intent(in)                                      :: delta_i_c, delta_j_c    !< Nest motion in i,j direction
@@ -888,11 +914,11 @@ contains
 
   !>@brief The subroutine 'mn_phys_dump_to_netcdf' dumps physics variables to debugging netCDF files
   !>@details This subroutine is called for the nest and parent PEs.
-  subroutine mn_phys_dump_to_netcdf(Atm, Atm_block, IPD_Control, IPD_Data, time_val, file_prefix, is_fine_pe, domain_coarse, domain_fine, nz)
+  subroutine mn_phys_dump_to_netcdf(Atm, Atm_block, GFS_Control, GFS_Data, time_val, file_prefix, is_fine_pe, domain_coarse, domain_fine, nz)
     type(fv_atmos_type), intent(in)            :: Atm                           !< Single instance of atmospheric data
     type (block_control_type), intent(in)      :: Atm_block                     !< Physics block layout
-    type(IPD_control_type), intent(in)         :: IPD_Control                   !< Physics metadata
-    type(IPD_data_type), intent(in)            :: IPD_Data(:)                   !< Physics variable data
+    type(GFS_control_type), intent(in)         :: GFS_Control                   !< Physics metadata
+    type(GFS_data_type), intent(in)            :: GFS_Data(:)                   !< Physics variable data
     integer, intent(in)                        :: time_val                      !< Timestep number for filename
     character(len=*), intent(in)               :: file_prefix                   !< Prefix for output netCDF filenames
     logical, intent(in)                        :: is_fine_pe                    !< Is this the nest PE?
@@ -949,15 +975,15 @@ contains
 
     ! Just allocate compute domain size here for outputs;  the nest moving code also has halos added, but we don't need them here.
     if (move_physics) then
-      allocate ( smc_pr_local(is:ie, js:je, IPD_Control%lsoil) )
-      allocate ( stc_pr_local(is:ie, js:je, IPD_Control%lsoil) )
-      allocate ( slc_pr_local(is:ie, js:je, IPD_Control%lsoil) )
+      allocate ( smc_pr_local(is:ie, js:je, GFS_Control%lsoil) )
+      allocate ( stc_pr_local(is:ie, js:je, GFS_Control%lsoil) )
+      allocate ( slc_pr_local(is:ie, js:je, GFS_Control%lsoil) )
       allocate ( sealand_pr_local(is:ie, js:je) )
       allocate ( lakefrac_pr_local(is:ie, js:je) )
       allocate ( landfrac_pr_local(is:ie, js:je) )
       allocate ( emis_lnd_pr_local(is:ie, js:je) )
-      allocate ( phy_f2d_pr_local(is:ie, js:je, IPD_Control%ntot2d) )
-      allocate ( phy_f3d_pr_local(is:ie, js:je, IPD_Control%levs, IPD_Control%ntot3d) )
+      allocate ( phy_f2d_pr_local(is:ie, js:je, GFS_Control%ntot2d) )
+      allocate ( phy_f3d_pr_local(is:ie, js:je, GFS_Control%levs, GFS_Control%ntot3d) )
       allocate ( tsfco_pr_local(is:ie, js:je) )
       allocate ( tsfcl_pr_local(is:ie, js:je) )
       allocate ( tsfc_pr_local(is:ie, js:je) )
@@ -1026,68 +1052,68 @@ contains
         j = Atm_block%index(nb)%jj(ix)
 
         if (move_physics) then
-          do k = 1, IPD_Control%lsoil
+          do k = 1, GFS_Control%lsoil
             ! Use real() to lower the precision
-            smc_pr_local(i,j,k) = real(IPD_Data(nb)%Sfcprop%smc(ix,k))
-            stc_pr_local(i,j,k) = real(IPD_Data(nb)%Sfcprop%stc(ix,k))
-            slc_pr_local(i,j,k) = real(IPD_Data(nb)%Sfcprop%slc(ix,k))
+            smc_pr_local(i,j,k) = real(GFS_Data(nb)%Sfcprop%smc(ix,k))
+            stc_pr_local(i,j,k) = real(GFS_Data(nb)%Sfcprop%stc(ix,k))
+            slc_pr_local(i,j,k) = real(GFS_Data(nb)%Sfcprop%slc(ix,k))
           enddo
 
-          sealand_pr_local(i,j) = real(IPD_Data(nb)%Sfcprop%slmsk(ix))
-          lakefrac_pr_local(i,j) = real(IPD_Data(nb)%Sfcprop%lakefrac(ix))
-          landfrac_pr_local(i,j) = real(IPD_Data(nb)%Sfcprop%landfrac(ix))
-          emis_lnd_pr_local(i,j) = real(IPD_Data(nb)%Sfcprop%emis_lnd(ix))
-          deep_soil_t_pr_local(i, j) = IPD_data(nb)%Sfcprop%tg3(ix)
-          soil_type_pr_local(i, j) = IPD_data(nb)%Sfcprop%stype(ix)
-          !veg_frac_pr_local(i, j) = IPD_data(nb)%Sfcprop%vfrac(ix)
-          veg_type_pr_local(i, j) = IPD_data(nb)%Sfcprop%vtype(ix)
-          slope_type_pr_local(i, j) = IPD_data(nb)%Sfcprop%slope(ix)
-          facsf_pr_local(i, j) = IPD_data(nb)%Sfcprop%facsf(ix)
-          facwf_pr_local(i, j) = IPD_data(nb)%Sfcprop%facwf(ix)
-          zorl_pr_local(i, j) = IPD_data(nb)%Sfcprop%zorl(ix)
-          zorlw_pr_local(i, j) = IPD_data(nb)%Sfcprop%zorlw(ix)
-          zorll_pr_local(i, j) = IPD_data(nb)%Sfcprop%zorll(ix)
-          zorli_pr_local(i, j) = IPD_data(nb)%Sfcprop%zorli(ix)
-          usfco_pr_local(i, j) = IPD_data(nb)%Sfcprop%usfco(ix)
-          vsfco_pr_local(i, j) = IPD_data(nb)%Sfcprop%vsfco(ix)
-          max_snow_alb_pr_local(i, j) = IPD_data(nb)%Sfcprop%snoalb(ix)
-          tsfco_pr_local(i, j) = IPD_data(nb)%Sfcprop%tsfco(ix)
-          tsfcl_pr_local(i, j) = IPD_data(nb)%Sfcprop%tsfcl(ix)
-          tsfc_pr_local(i, j)  = IPD_data(nb)%Sfcprop%tsfc(ix)
-          vegfrac_pr_local(i, j) = IPD_data(nb)%Sfcprop%vfrac(ix)
-          alvsf_pr_local(i, j) = IPD_data(nb)%Sfcprop%alvsf(ix)
-          alvwf_pr_local(i, j) = IPD_data(nb)%Sfcprop%alvwf(ix)
-          alnsf_pr_local(i, j) = IPD_data(nb)%Sfcprop%alnsf(ix)
-          alnwf_pr_local(i, j) = IPD_data(nb)%Sfcprop%alnwf(ix)
+          sealand_pr_local(i,j) = real(GFS_Data(nb)%Sfcprop%slmsk(ix))
+          lakefrac_pr_local(i,j) = real(GFS_Data(nb)%Sfcprop%lakefrac(ix))
+          landfrac_pr_local(i,j) = real(GFS_Data(nb)%Sfcprop%landfrac(ix))
+          emis_lnd_pr_local(i,j) = real(GFS_Data(nb)%Sfcprop%emis_lnd(ix))
+          deep_soil_t_pr_local(i, j) = GFS_data(nb)%Sfcprop%tg3(ix)
+          soil_type_pr_local(i, j) = GFS_data(nb)%Sfcprop%stype(ix)
+          !veg_frac_pr_local(i, j) = GFS_data(nb)%Sfcprop%vfrac(ix)
+          veg_type_pr_local(i, j) = GFS_data(nb)%Sfcprop%vtype(ix)
+          slope_type_pr_local(i, j) = GFS_data(nb)%Sfcprop%slope(ix)
+          facsf_pr_local(i, j) = GFS_data(nb)%Sfcprop%facsf(ix)
+          facwf_pr_local(i, j) = GFS_data(nb)%Sfcprop%facwf(ix)
+          zorl_pr_local(i, j) = GFS_data(nb)%Sfcprop%zorl(ix)
+          zorlw_pr_local(i, j) = GFS_data(nb)%Sfcprop%zorlw(ix)
+          zorll_pr_local(i, j) = GFS_data(nb)%Sfcprop%zorll(ix)
+          zorli_pr_local(i, j) = GFS_data(nb)%Sfcprop%zorli(ix)
+          usfco_pr_local(i, j) = GFS_data(nb)%Sfcprop%usfco(ix)
+          vsfco_pr_local(i, j) = GFS_data(nb)%Sfcprop%vsfco(ix)
+          max_snow_alb_pr_local(i, j) = GFS_data(nb)%Sfcprop%snoalb(ix)
+          tsfco_pr_local(i, j) = GFS_data(nb)%Sfcprop%tsfco(ix)
+          tsfcl_pr_local(i, j) = GFS_data(nb)%Sfcprop%tsfcl(ix)
+          tsfc_pr_local(i, j)  = GFS_data(nb)%Sfcprop%tsfc(ix)
+          vegfrac_pr_local(i, j) = GFS_data(nb)%Sfcprop%vfrac(ix)
+          alvsf_pr_local(i, j) = GFS_data(nb)%Sfcprop%alvsf(ix)
+          alvwf_pr_local(i, j) = GFS_data(nb)%Sfcprop%alvwf(ix)
+          alnsf_pr_local(i, j) = GFS_data(nb)%Sfcprop%alnsf(ix)
+          alnwf_pr_local(i, j) = GFS_data(nb)%Sfcprop%alnwf(ix)
 
-          do nv = 1, IPD_Control%ntot2d
+          do nv = 1, GFS_Control%ntot2d
             ! Use real() to lower the precision
-            phy_f2d_pr_local(i,j,nv) = real(IPD_Data(nb)%Tbd%phy_f2d(ix, nv))
+            phy_f2d_pr_local(i,j,nv) = real(GFS_Data(nb)%Tbd%phy_f2d(ix, nv))
           enddo
 
-          do k = 1, IPD_Control%levs
-            do nv = 1, IPD_Control%ntot3d
+          do k = 1, GFS_Control%levs
+            do nv = 1, GFS_Control%ntot3d
               ! Use real() to lower the precision
-              phy_f3d_pr_local(i,j,k,nv) = real(IPD_Data(nb)%Tbd%phy_f3d(ix, k, nv))
+              phy_f3d_pr_local(i,j,k,nv) = real(GFS_Data(nb)%Tbd%phy_f3d(ix, k, nv))
             enddo
           enddo
         endif
 
         if (move_nsst) then
-          tref_pr_local(i,j) = IPD_data(nb)%Sfcprop%tref(ix)
-          c_0_pr_local(i,j) = IPD_data(nb)%Sfcprop%c_0(ix)
-          xt_pr_local(i,j) = IPD_data(nb)%Sfcprop%xt(ix)
-          xu_pr_local(i,j) = IPD_data(nb)%Sfcprop%xu(ix)
-          xv_pr_local(i,j) = IPD_data(nb)%Sfcprop%xv(ix)
-          ifd_pr_local(i,j) = IPD_data(nb)%Sfcprop%ifd(ix)
+          tref_pr_local(i,j) = GFS_data(nb)%Sfcprop%tref(ix)
+          c_0_pr_local(i,j) = GFS_data(nb)%Sfcprop%c_0(ix)
+          xt_pr_local(i,j) = GFS_data(nb)%Sfcprop%xt(ix)
+          xu_pr_local(i,j) = GFS_data(nb)%Sfcprop%xu(ix)
+          xv_pr_local(i,j) = GFS_data(nb)%Sfcprop%xv(ix)
+          ifd_pr_local(i,j) = GFS_data(nb)%Sfcprop%ifd(ix)
         endif
       enddo
     enddo
 
     if (move_physics) then
-      !call mn_var_dump_to_netcdf(stc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, IPD_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILT")
-      !call mn_var_dump_to_netcdf(smc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, IPD_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILM")
-      !call mn_var_dump_to_netcdf(slc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, IPD_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILL")
+      !call mn_var_dump_to_netcdf(stc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, GFS_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILT")
+      !call mn_var_dump_to_netcdf(smc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, GFS_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILM")
+      !call mn_var_dump_to_netcdf(slc_pr_local, is_fine_pe, domain_coarse, domain_fine, position, GFS_Control%lsoil, time_val, Atm%global_tile, file_prefix, "SOILL")
       call mn_var_dump_to_netcdf(sealand_pr_local, is_fine_pe, domain_coarse, domain_fine, position, time_val, Atm%global_tile, file_prefix, "LMASK")
       call mn_var_dump_to_netcdf(lakefrac_pr_local, is_fine_pe, domain_coarse, domain_fine, position, time_val, Atm%global_tile, file_prefix, "LAKEFRAC")
       call mn_var_dump_to_netcdf(landfrac_pr_local, is_fine_pe, domain_coarse, domain_fine, position, time_val, Atm%global_tile, file_prefix, "LANDFRAC")
@@ -1115,15 +1141,15 @@ contains
       call mn_var_dump_to_netcdf(usfco_pr_local, is_fine_pe, domain_coarse, domain_fine, position, time_val, Atm%global_tile, file_prefix, "SSU")
       call mn_var_dump_to_netcdf(vsfco_pr_local, is_fine_pe, domain_coarse, domain_fine, position, time_val, Atm%global_tile, file_prefix, "SSV")
 
-      do nv = 1, IPD_Control%ntot2d
+      do nv = 1, GFS_Control%ntot2d
         write (phys_var_name, "(A4,I0.3)")  'PH2D', nv
         !call mn_var_dump_to_netcdf(phy_f2d_pr_local(:,:,nv), is_fine_pe, domain_coarse, domain_fine, position, 1, &
         !    time_val, Atm%global_tile, file_prefix, phys_var_name)
       enddo
 
-      do nv = 1, IPD_Control%ntot3d
+      do nv = 1, GFS_Control%ntot3d
         write (phys_var_name, "(A4,I0.3)")  'PH3D', nv
-        !call mn_var_dump_to_netcdf(phy_f3d_pr_local(:,:,:,nv), is_fine_pe, domain_coarse, domain_fine, position, IPD_Control%levs, &
+        !call mn_var_dump_to_netcdf(phy_f3d_pr_local(:,:,:,nv), is_fine_pe, domain_coarse, domain_fine, position, GFS_Control%levs, &
         !    time_val, Atm%global_tile, file_prefix, phys_var_name)
       enddo
     endif
