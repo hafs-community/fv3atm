@@ -828,15 +828,29 @@ contains
        !call mover_r8_2d(mi, 'sfalb_lnd', mn_phys%sfalb_lnd, GFS_Data%Sfcprop%sfalb_lnd, halo_interp=A_grid, wt_h=wt_h)
 
       ! sea/land mask array (sea:0,land:1,sea-ice:2)
+      call mover_phys_2d_masked(mi, 'emis_lnd', mn_phys%emis_lnd, GFS_Data%Sfcprop%emis_lnd, &
+           halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
+      call mover_phys_2d_masked(mi, 'emis_ice', mn_phys%emis_ice, GFS_Data%Sfcprop%emis_ice, &
+           halo_interp=A_grid_lmask, halo_slmsk=2, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
+      call mover_phys_2d_masked(mi, 'emis_wat', mn_phys%emis_wat, GFS_Data%Sfcprop%emis_wat, &
+           halo_interp=A_grid_lmask, halo_slmsk=0, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
 
-      call mover(mi, "emis_lnd", mn_phys%emis_lnd, dummy2d, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
-      call mover(mi, "emis_ice", mn_phys%emis_ice, dummy2d, interp_type_lmask, 2, 0.5_kind_phys, wt_h=wt_h)
-      call mover(mi, "emis_wat", mn_phys%emis_wat, dummy2d, interp_type_lmask, 0, 0.5_kind_phys, wt_h=wt_h)
-
-      call mover(mi, "albdirvis_lnd", mn_phys%albdirvis_lnd, dummy2d, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
-      call mover(mi, "albdirnir_lnd", mn_phys%albdirnir_lnd, dummy2d, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
-      call mover(mi, "albdifvis_lnd", mn_phys%albdifvis_lnd, dummy2d, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
-      call mover(mi, "albdifnir_lnd", mn_phys%albdifnir_lnd, dummy2d, interp_type_lmask, 1, 0.5_kind_phys, wt_h=wt_h)
+      ! When copying back to GFS_Data, set albedo values to physically reasonable values if they have negative fill values.
+      call mover_phys_2d_masked(mi, 'albdirvis_lnd ', mn_phys%albdirvis_lnd , GFS_Data%Sfcprop%albdirvis_lnd, &
+           halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
+      call mover_phys_2d_masked(mi, 'albdirnir_lnd ', mn_phys%albdirnir_lnd , GFS_Data%Sfcprop%albdirnir_lnd , &
+           halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
+      call mover_phys_2d_masked(mi, 'albdifvis_lnd ', mn_phys%albdifvis_lnd , GFS_Data%Sfcprop%albdifvis_lnd, &
+           halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
+      call mover_phys_2d_masked(mi, 'albdifnir_lnd ', mn_phys%albdifnir_lnd , GFS_Data%Sfcprop%albdifnir_lnd, &
+           halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=0.5_kind_phys, wt_h=wt_h, &
+           if_negative=0.5_kind_phys)
 
       !call mover_r8_2d(mi, 'sfalb_lnd_bck', mn_phys%sfalb_lnd_bck, GFS_Data%Sfcprop%sfalb_lnd_bck, halo_interp=A_grid, wt_h=wt_h)
       !call mover_r8_2d(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, halo_interp=A_grid, wt_h=wt_h)
@@ -858,12 +872,24 @@ contains
       call mover_r8_2d(mi, 'shdmin', mn_phys%shdmin, GFS_Data%Sfcprop%shdmin, halo_interp=A_grid, wt_h=wt_h)
       call mover_r8_2d(mi, 'shdmax', mn_phys%shdmax, GFS_Data%Sfcprop%shdmax, halo_interp=A_grid, wt_h=wt_h)
 
-      call mover(mi, "zorl", mn_phys%zorl, dummy2d, interp_type, wt_h=wt_h)
-      call mover(mi, "zorll", mn_phys%zorll, dummy2d, interp_type_lmask, 1, 86.0_kind_phys, wt_h=wt_h)
-      call mover(mi, "zorlwav", mn_phys%zorlwav, dummy2d, interp_type_lmask, 0, 77.0_kind_phys, wt_h=wt_h)
-      call mover(mi, "zorlw", mn_phys%zorlw, dummy2d, interp_type_lmask, 0, 78.0_kind_phys, wt_h=wt_h)
-      call mover(mi, "usfco", mn_phys%usfco, dummy2d, interp_type_lmask, 0, 0.0_kind_phys, wt_h=wt_h)
-      call mover(mi, "vsfco", mn_phys%vsfco, dummy2d, interp_type_lmask, 0, 0.0_kind_phys, wt_h=wt_h)
+       call mover_phys_2d_masked(mi, 'zorll', mn_phys%zorll, GFS_Data%Sfcprop%zorll, &
+            halo_interp=A_grid_lmask, halo_slmsk=1, halo_default=86.0_kind_phys, wt_h=wt_h, &
+            if_missing_on_land=82.0_kind_phys)
+       call mover_phys_2d_masked(mi, 'zorlw', mn_phys%zorlw, GFS_Data%Sfcprop%zorlw, &
+            halo_interp=A_grid_lmask, halo_slmsk=0, halo_default=78.0_kind_phys, wt_h=wt_h, &
+            if_missing_on_sea=83.0_kind_phys)
+       call mover_phys_2d_masked(mi, 'zorlwav', mn_phys%zorlwav, GFS_Data%Sfcprop%zorlwav, &
+            halo_interp=A_grid_lmask, halo_slmsk=0, halo_default=77.0_kind_phys, wt_h=wt_h, &
+            if_missing_on_sea=84.0_kind_phys)
+       call mover_phys_2d_masked(mi, 'usfco', mn_phys%usfco, GFS_Data%Sfcprop%usfco, &
+            halo_interp=A_grid_lmask, halo_slmsk=0, halo_default=0.0_kind_phys, wt_h=wt_h, &
+            if_missing_on_sea=0.0_kind_phys)
+       call mover_phys_2d_masked(mi, 'vsfco', mn_phys%vsfco, GFS_Data%Sfcprop%vsfco, &
+            halo_interp=A_grid_lmask, halo_slmsk=0, halo_default=0.0_kind_phys, wt_h=wt_h, &
+            if_missing_on_sea=0.0_kind_phys)
+
+       call mover_r8_2d(mi, 'zorl', mn_phys%zorl, GFS_Data%Sfcprop%zorl, halo_interp=A_grid, wt_h=wt_h, &
+            if_missing=85.0_kind_phys)
 
       call mover_r8_2d(mi, 'tsfco', mn_phys%tsfco, GFS_Data%Sfcprop%tsfco, halo_interp=A_grid, wt_h=wt_h)
       call mover_r8_2d(mi, 'tsfcl', mn_phys%tsfcl, GFS_Data%Sfcprop%tsfcl, halo_interp=A_grid, wt_h=wt_h)
@@ -872,9 +898,9 @@ contains
       call mover_phys_3d(mi, 'phy_f2d', mn_phys%phy_f2d, GFS_Data%Tbd%phy_f2d, halo_interp=A_grid, wt_h=wt_h)
       call mover_phys_4d(mi, 'phy_f3d', mn_phys%phy_f3d, GFS_Data%Tbd%phy_f3d, halo_interp=A_grid, wt_h=wt_h)
 
-      call mover(mi, "cv", mn_phys%cv, dummy2d, interp_type, wt_h=wt_h)
-      call mover(mi, "cvt", mn_phys%cvt, dummy2d, interp_type, wt_h=wt_h)
-      call mover(mi, "cvb", mn_phys%cvb, dummy2d, interp_type, wt_h=wt_h)
+      call mover_r8_2d(mi, 'cv', mn_phys%cv, GFS_Data%Cldprop%cv, halo_interp=A_grid, wt_h=wt_h)
+      call mover_r8_2d(mi, 'cvt', mn_phys%cvt, GFS_Data%Cldprop%cvt, halo_interp=A_grid, wt_h=wt_h)
+      call mover_r8_2d(mi, 'cvb', mn_phys%cvb, GFS_Data%Cldprop%cvb, halo_interp=A_grid, wt_h=wt_h)
     endif
 
     if (move_nsst) then
