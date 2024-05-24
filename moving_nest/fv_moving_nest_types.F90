@@ -398,6 +398,10 @@ contains
     logical :: move_physics, move_nsst
     integer :: lsoil, nmtvr, levs, ntot2d, ntot3d
 
+    interface alloc_dealloc
+       procedure alloc_dealloc_2d_r4, alloc_dealloc_2d_r8, alloc_dealloc_3d, alloc_dealloc_4d
+    end interface alloc_dealloc
+
     ! Copy these to locals to reduce typing
     isd = mn_phys%isd
     ied = mn_phys%ied
@@ -412,126 +416,149 @@ contains
     ntot2d = mn_phys%ntot2d
     ntot3d = mn_phys%ntot3d
 
-    ! These preprocessor macros vastly reduce code length.
-#define ALLOC_DEALLOC_2D(var, idim, jdim) \
-    if(allocated(mn_phys%var)) then ; \
-      deallocate ( mn_phys%var ) ; \
-    endif ; \
-    if (to_alloc) then ; \
-      allocate ( mn_phys%var(idim, jdim) ) ; \
-      mn_phys%var = +99999.9 ; \
-    endif
-
-#define ALLOC_DEALLOC_3D(var, idim, jdim, kdim) \
-    if(allocated(mn_phys%var)) then ; \
-      deallocate ( mn_phys%var ) ; \
-    endif ; \
-    if (to_alloc) then ; \
-      allocate ( mn_phys%var(idim, jdim, kdim) ) ; \
-      mn_phys%var = +99999.9 ; \
-    endif
-
-#define ALLOC_DEALLOC_4D(var, idim, jdim, kdim, mdim) \
-    if(allocated(mn_phys%var)) then ; \
-      deallocate ( mn_phys%var ) ; \
-    endif ; \
-    if (to_alloc) then ; \
-      allocate ( mn_phys%var(idim, jdim, kdim, mdim) ) ; \
-      mn_phys%var = +99999.9 ; \
-    endif
-
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
-    ALLOC_DEALLOC_2D(ts, isd:ied, jsd:jed)
+    call alloc_dealloc(mn_phys%ts)
 
     if (move_physics) then
-      ALLOC_DEALLOC_2D(slmsk, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_3D(smc, isd:ied, jsd:jed, lsoil)
-      ALLOC_DEALLOC_3D(stc, isd:ied, jsd:jed, lsoil)
-      ALLOC_DEALLOC_3D(slc, isd:ied, jsd:jed, lsoil)
+       call alloc_dealloc(mn_phys%slmsk)
+       call alloc_dealloc(mn_phys%smc, lsoil)
+       call alloc_dealloc(mn_phys%stc, lsoil)
+       call alloc_dealloc(mn_phys%slc, lsoil)
 
-      ALLOC_DEALLOC_2D(sfalb_lnd, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(emis_lnd, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(emis_ice, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(emis_wat, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(sfalb_lnd_bck, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%sfalb_lnd)
+       call alloc_dealloc(mn_phys%emis_lnd)
+       call alloc_dealloc(mn_phys%emis_ice)
+       call alloc_dealloc(mn_phys%emis_wat)
+       call alloc_dealloc(mn_phys%sfalb_lnd_bck)
 
-      !ALLOC_DEALLOC_2D(semis, isd:ied, jsd:jed)
-      !ALLOC_DEALLOC_2D(semisbase, isd:ied, jsd:jed)
-      !ALLOC_DEALLOC_2D(sfalb, isd:ied, jsd:jed)
+       !call alloc_dealloc(mn_phys%semis)
+       !call alloc_dealloc(mn_phys%semisbase)
+       !call alloc_dealloc(mn_phys%sfalb)
 
-      ALLOC_DEALLOC_2D(u10m, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(v10m, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(tprcp, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%u10m)
+       call alloc_dealloc(mn_phys%v10m)
+       call alloc_dealloc(mn_phys%tprcp)
 
-      ALLOC_DEALLOC_3D(hprime, isd:ied, jsd:jed, nmtvr)
+       call alloc_dealloc(mn_phys%hprime, nmtvr)
 
-      ALLOC_DEALLOC_2D(zorl, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(zorll, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(zorlwav, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(zorlw, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%zorl)
+       call alloc_dealloc(mn_phys%zorll)
+       call alloc_dealloc(mn_phys%zorlwav)
+       call alloc_dealloc(mn_phys%zorlw)
 
-      ALLOC_DEALLOC_2D(usfco, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(vsfco, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%usfco)
+       call alloc_dealloc(mn_phys%vsfco)
 
-      ALLOC_DEALLOC_2D(alvsf, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(alvwf, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(alnsf, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(alnwf, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%alvsf)
+       call alloc_dealloc(mn_phys%alvwf)
+       call alloc_dealloc(mn_phys%alnsf)
+       call alloc_dealloc(mn_phys%alnwf)
 
-      ALLOC_DEALLOC_2D(facsf, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(facwf, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%facsf)
+       call alloc_dealloc(mn_phys%facwf)
 
-      ALLOC_DEALLOC_2D(lakefrac, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(lakedepth, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%lakefrac)
+       call alloc_dealloc(mn_phys%lakedepth)
 
-      ALLOC_DEALLOC_2D(canopy, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(vegfrac, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(uustar, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(shdmin, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(shdmax, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(tsfco, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(tsfcl, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(tsfc, isd:ied, jsd:jed)
-      !ALLOC_DEALLOC_2D(tsfc_radtime, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%canopy)
+       call alloc_dealloc(mn_phys%vegfrac)
+       call alloc_dealloc(mn_phys%uustar)
+       call alloc_dealloc(mn_phys%shdmin)
+       call alloc_dealloc(mn_phys%shdmax)
+       call alloc_dealloc(mn_phys%tsfco)
+       call alloc_dealloc(mn_phys%tsfcl)
+       call alloc_dealloc(mn_phys%tsfc)
+       !call alloc_dealloc(mn_phys%tsfc_radtime)
 
-      ALLOC_DEALLOC_2D(albdirvis_lnd , isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(albdirnir_lnd , isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(albdifvis_lnd , isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(albdifnir_lnd , isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%albdirvis_lnd)
+       call alloc_dealloc(mn_phys%albdirnir_lnd)
+       call alloc_dealloc(mn_phys%albdifvis_lnd)
+       call alloc_dealloc(mn_phys%albdifnir_lnd)
 
-      ALLOC_DEALLOC_2D(cv, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(cvt, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(cvb, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%cv)
+       call alloc_dealloc(mn_phys%cvt)
+       call alloc_dealloc(mn_phys%cvb)
 
-      ALLOC_DEALLOC_3D(phy_f2d, isd:ied, jsd:jed, ntot2d)
-      ALLOC_DEALLOC_4D(phy_f3d, isd:ied, jsd:jed, levs, ntot3d)
+       call alloc_dealloc(mn_phys%phy_f2d, ntot2d)
+       call alloc_dealloc(mn_phys%phy_f3d, levs, ntot3d)
     end if
 
     if (move_nsst) then
-      ALLOC_DEALLOC_2D(tref, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(z_c, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(c_0, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(c_d, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(w_0, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(w_d, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xt, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xs, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xu, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xv, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xz, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(zm, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xtts, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(xzts, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(d_conv, isd:ied, jsd:jed)
-      !ALLOC_DEALLOC_2D(ifd, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(dt_cool, isd:ied, jsd:jed)
-      ALLOC_DEALLOC_2D(qrain, isd:ied, jsd:jed)
+       call alloc_dealloc(mn_phys%tref)
+       call alloc_dealloc(mn_phys%z_c)
+       call alloc_dealloc(mn_phys%c_0)
+       call alloc_dealloc(mn_phys%c_d)
+       call alloc_dealloc(mn_phys%w_0)
+       call alloc_dealloc(mn_phys%w_d)
+       call alloc_dealloc(mn_phys%xt)
+       call alloc_dealloc(mn_phys%xs)
+       call alloc_dealloc(mn_phys%xu)
+       call alloc_dealloc(mn_phys%xv)
+       call alloc_dealloc(mn_phys%xz)
+       call alloc_dealloc(mn_phys%zm)
+       call alloc_dealloc(mn_phys%xtts)
+       call alloc_dealloc(mn_phys%xzts)
+       call alloc_dealloc(mn_phys%d_conv)
+       !call alloc_dealloc(mn_phys%ifd)
+       call alloc_dealloc(mn_phys%dt_cool)
+       call alloc_dealloc(mn_phys%qrain)
     end if
 
-    ! These macros are only used locally. We remove them from the preprocessor namespace here to avoid cluttering it.
-#undef ALLOC_DEALLOC_2D
-#undef ALLOC_DEALLOC_3D
-#undef ALLOC_DEALLOC_4D
+  contains
+
+    subroutine alloc_dealloc_2d_r8(var)
+      implicit none
+      real(kind=8), allocatable :: var(:,:)
+
+      if(allocated(var)) then
+         deallocate(var)
+      endif
+      if(to_alloc) then
+         allocate(var(isd:ied, jsd:jed))
+         var = +99999.9
+      endif
+    end subroutine alloc_dealloc_2d_r8
+
+    subroutine alloc_dealloc_2d_r4(var)
+      implicit none
+      real(kind=4), allocatable :: var(:,:)
+
+      if(allocated(var)) then
+         deallocate(var)
+      endif
+      if(to_alloc) then
+         allocate(var(isd:ied, jsd:jed))
+         var = +99999.9
+      endif
+    end subroutine alloc_dealloc_2d_r4
+
+    subroutine alloc_dealloc_3d(var, kdim)
+      implicit none
+      real(kind_phys), allocatable :: var(:,:,:)
+      integer, intent(in) :: kdim
+
+      if(allocated(var)) then
+         deallocate(var)
+      endif
+      if(to_alloc) then
+         allocate(var(isd:ied, jsd:jed, kdim))
+         var = +99999.9
+      endif
+    end subroutine alloc_dealloc_3d
+
+    subroutine alloc_dealloc_4d(var, kdim, mdim)
+      implicit none
+      real(kind_phys), allocatable :: var(:,:,:,:)
+      integer, intent(in) :: kdim, mdim
+
+      if(allocated(var)) then
+         deallocate(var)
+      endif
+      if(to_alloc) then
+         allocate(var(isd:ied, jsd:jed, kdim, mdim))
+         var = +99999.9
+      endif
+    end subroutine alloc_dealloc_4d
 
   end subroutine fv_moving_nest_physics_alloc_dealloc
 
