@@ -39,6 +39,7 @@ module fv_moving_nest_types_mod
   use fv_arrays_mod,   only: fv_atmos_type
   use fv_mp_mod,       only: MAX_NNEST
   use mpp_mod,         only: input_nml_file, mpp_pe, read_input_nml
+  use GFS_typedefs,    only: GFS_control_type
 
   implicit none
 
@@ -366,12 +367,14 @@ contains
     call mn_phys%alloc_dealloc(.false.)
   end subroutine deallocate_fv_moving_nest_physics_type
 
-  subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_nsst, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
+  subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, GFS_Control, move_physics, move_nsst, mn_phys)
     implicit none
-    integer, intent(in)                           :: isd, ied, jsd, jed, npz
-    logical, intent(in)                           :: move_physics, move_nsst
-    integer, intent(in)                           :: lsoil, nmtvr, levs, ntot2d, ntot3d    ! From IPD_Control
-    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
+    type(GFS_control_type), intent(in)               :: GFS_Control   !< Physics metadata
+    integer, intent(in)                              :: npz           !< vertical dimension
+    integer, intent(in)                              :: isd, ied, jsd, jed !< horizontal dimensions with halos added
+    logical, intent(in)                              :: move_physics  !< Flag for moving physics variables. Always true.
+    logical, intent(in)                              :: move_nsst     !< Flag for moving nsst variables
+    type(fv_moving_nest_physics_type), target        :: mn_phys       !< Storage for physics fields with halos
 
     mn_phys%isd = isd
     mn_phys%ied = ied
@@ -380,11 +383,11 @@ contains
     mn_phys%npz = npz
     mn_phys%move_physics = move_physics
     mn_phys%move_nsst = move_nsst
-    mn_phys%lsoil = lsoil
-    mn_phys%nmtvr = nmtvr
-    mn_phys%levs = levs
-    mn_phys%ntot2d = ntot2d
-    mn_phys%ntot3d = ntot3d
+    mn_phys%lsoil = GFS_Control%lsoil
+    mn_phys%nmtvr = GFS_Control%nmtvr
+    mn_phys%levs = GFS_Control%levs
+    mn_phys%ntot2d = GFS_Control%ntot2d
+    mn_phys%ntot3d = GFS_Control%ntot3d
 
     call mn_phys%alloc_dealloc(.true.)
   end subroutine allocate_fv_moving_nest_physics_type

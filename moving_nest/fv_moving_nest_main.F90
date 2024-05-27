@@ -625,9 +625,7 @@ contains
       !  The others can safely remain unallocated.
 
       call allocate_fv_moving_nest_prog_type(isd, ied, jsd, jed, npz, Moving_nest(n)%mn_prog)
-      call allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_nsst, &
-          IPD_Control%lsoil, IPD_Control%nmtvr, IPD_Control%levs, IPD_Control%ntot2d, IPD_Control%ntot3d, &
-          Moving_nest(n)%mn_phys)
+      call allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, IPD_Control, move_physics, move_nsst, Moving_nest(n)%mn_phys)
 
     endif
 
