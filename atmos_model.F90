@@ -1066,7 +1066,7 @@ subroutine atmos_model_end (Atmos)
 #ifdef MOVING_NEST
     !  Call this before atmosphere_end(), because that deallocates Atm
     if (Atmos%is_moving_nest) then
-      call moving_nest_end()
+      call moving_nest_end(GFS_Control)
       call nest_tracker_end()
     endif
 #endif

@@ -111,10 +111,10 @@ module fv_moving_nest_mod
 
   logical :: debug_log = .false.
 
-#include <fms_platform.h>
-
   !! Step 2
   interface mn_var_fill_intern_nest_halos
+    module procedure mn_var_fill_intern_nest_halos_int_2d
+
     module procedure mn_var_fill_intern_nest_halos_r4_2d
     module procedure mn_var_fill_intern_nest_halos_r4_3d
     module procedure mn_var_fill_intern_nest_halos_r4_4d
@@ -129,6 +129,8 @@ module fv_moving_nest_mod
 
   !! Step 6
   interface mn_var_shift_data
+    module procedure mn_var_shift_data_int_2d
+
     module procedure mn_var_shift_data_r4_2d
     module procedure mn_var_shift_data_r4_3d
     module procedure mn_var_shift_data_r4_4d
@@ -392,6 +394,26 @@ contains
   !   Step 4 -- Per variable fill internal nest halos
   !
   !================================================================================
+
+  !>@brief The subroutine 'mn_var_fill_intern_nest_halos_r4_2d' fills internal nest halos
+  !>@details This version of the subroutine is for 2D arrays of single precision reals.
+  subroutine mn_var_fill_intern_nest_halos_int_2d(data_var, domain_fine, is_fine_pe)
+    integer, allocatable, intent(inout)          :: data_var(:,:)  !< Model variable data
+    type(domain2d), intent(inout)               :: domain_fine    !< Nest domain structure
+    logical, intent(in)                         :: is_fine_pe     !< Is this the nest PE?
+
+    integer                      :: this_pe
+    this_pe = mpp_pe()
+
+    if (is_fine_pe) then
+      ! mpp_update_domains fills the halo region of the fine grids for the interior of the nest.
+      ! The fine nest boundary with the coarse grid remains unchanged.
+      ! seems that this only performs communication between fine nest PEs
+      ! Just transfers halo data between tiles of same resolution -- doesn't perform any interpolation!
+      call mpp_update_domains(data_var, domain_fine,  flags=NUPDATE + EUPDATE + SUPDATE + WUPDATE)
+    endif
+
+  end subroutine mn_var_fill_intern_nest_halos_int_2d
 
   !>@brief The subroutine 'mn_var_fill_intern_nest_halos_r4_2d' fills internal nest halos
   !>@details This version of the subroutine is for 2D arrays of single precision reals.
@@ -1182,6 +1204,76 @@ contains
     deallocate(wbuffer)
 
   end subroutine mn_var_shift_data_r4_2d
+
+  !>@brief The subroutine 'mn_prog_shift_data_int_2d' shifts the data for a variable on each nest PE
+  !>@details For single variable
+  subroutine mn_var_shift_data_int_2d(data_var, interp_type, wt, ind, delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
+    integer, allocatable, intent(inout)          :: data_var(:,:)                                !< Data variable
+    integer, intent(in)                         :: interp_type                                  !< Interpolation stagger type
+    real, allocatable, intent(in)               :: wt(:,:,:)                                    !< Interpolation weight array
+    integer, allocatable, intent(in)            :: ind(:,:,:)                                   !< Fine to coarse index array
+    integer, intent(in)                         :: delta_i_c, delta_j_c, x_refine, y_refine     !< delta i,j for nest move.  Nest refinement.
+    logical, intent(in)                         :: is_fine_pe                                   !< Is nest PE?
+    type(nest_domain_type), intent(inout)       :: nest_domain                                  !< Nest domain structure
+    integer, intent(in)                         :: position                                     !< Grid offset
+
+    integer, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
+    type(bbox)      :: north_fine, north_coarse ! step 4
+    type(bbox)      :: south_fine, south_coarse
+    type(bbox)      :: east_fine, east_coarse
+    type(bbox)      :: west_fine, west_coarse
+    integer         :: nest_level = 1  ! TODO allow to vary
+
+    !!===========================================================
+    !!
+    !! Fill halo buffers
+    !!
+    !!===========================================================
+
+    call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position)
+    call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position)
+    call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position)
+    call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position)
+
+    !====================================================
+    ! Passes data from coarse grid to fine grid's halo buffers; requires nest_domain to be intent(inout)
+    call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
+
+    if (is_fine_pe) then
+
+      !!===========================================================
+      !!
+      !! Shift grids internal to each nest PE
+      !!
+      !!===========================================================
+
+      if ( delta_i_c .ne. 0 ) then
+        data_var = eoshift(data_var, x_refine * delta_i_c, DIM=1)
+      endif
+
+      if (delta_j_c .ne.  0) then
+        data_var = eoshift(data_var, y_refine * delta_j_c, DIM=2)
+      endif
+
+      !!===========================================================
+      !!
+      !! Apply halo data
+      !!
+      !!===========================================================
+
+
+      call fill_nest_from_buffer(interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind)
+      call fill_nest_from_buffer(interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind)
+    endif
+
+    deallocate(nbuffer)
+    deallocate(sbuffer)
+    deallocate(ebuffer)
+    deallocate(wbuffer)
+
+  end subroutine mn_var_shift_data_int_2d
 
   !>@brief The subroutine 'mn_prog_shift_data_r8_2d' shifts the data for a variable on each nest PE
   !>@details For one double precision 2D variable

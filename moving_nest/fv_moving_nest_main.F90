@@ -215,10 +215,12 @@ contains
 
 
 
-  subroutine moving_nest_end()
+  subroutine moving_nest_end(IPD_Control)
+    implicit none
+    type(IPD_control_type), intent(in)   :: IPD_control   !< Physics metadata
     integer :: n
 
-    call deallocate_fv_moving_nests(ngrids)
+    call deallocate_fv_moving_nests(IPD_Control, ngrids)
 
     ! From fv_grid_utils.F90
     n = mygrid

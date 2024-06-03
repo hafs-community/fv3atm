@@ -114,6 +114,8 @@ module fv_moving_nest_physics_mod
   logical :: move_physics = .true.       ! Always true, unless developer sets move_physics to .False. here for debugging.
   logical :: move_nsst = .true.          ! Value is reset in fv_moving_nest_main.F90 from namelist options
 
+  ! FIXME: Put move_hafs_subset in a namelist
+
   integer, parameter, private :: interp_A_grid = 1        ! cell-centered A-grid
   integer, parameter, private :: interp_A_grid_lmask = 7  ! land mask, cell-centered A-grid
 
@@ -130,29 +132,29 @@ module fv_moving_nest_physics_mod
   integer, parameter :: DO_COPY_FROM_BLOCK_ARRAYS = 5
 
   type movement_info
-    integer :: action = -1
-    type(fv_moving_nest_physics_type), pointer :: mn_phys => null()
-    type(fv_atmos_type), pointer :: ChildGrid => null()
-    type(nest_domain_type), pointer :: nest_domain => null()       !< Nest domain for FMS
-    type(domain2d), pointer :: domain_fine => null()
-    logical :: is_fine_pe = .false.
-    integer :: delta_i_c = -1
-    integer :: delta_j_c = -1
-    integer :: x_refine = -1
-    integer :: y_refine = -1
-    integer :: isd = -1
-    integer :: jsd = -1
-    integer, pointer :: ii(:) => null()
-    integer, pointer :: jj(:) => null()
-    real(kind=kind_phys), pointer :: slmsk(:) => null()
+    integer :: action = -1 !< One of the five "DO_" parameters in this module
+    type(fv_moving_nest_physics_type), pointer :: mn_phys => null() !< Physics variables with halos
+    type(fv_atmos_type), pointer :: ChildGrid => null() !< Grid data for the nest domain
+    type(nest_domain_type), pointer :: nest_domain => null() !< Nest domain for FMS
+    type(domain2d), pointer :: domain_fine => null() !< The nest domain
+    logical :: is_fine_pe = .false. !< Is this the nest in the parent-nest communication?
+    integer :: delta_i_c = -1 !< Movement in X direction
+    integer :: delta_j_c = -1 !< MOvement in Y direction
+    integer :: x_refine = -1 !< Nest refinement ratio, X direction
+    integer :: y_refine = -1 !< Nest refinement ratio, Y direction
+    integer :: isd = -1 !< i starting index of allocated area with halo
+    integer :: jsd = -1 !< j starting index of allocated area with halo
+    integer, pointer :: ii(:) => null() !< Physics block i index in domain
+    integer, pointer :: jj(:) => null() !< Physics block j index in domain
+    real(kind=kind_phys), pointer :: slmsk(:) => null() !< Physics block sea-land-ice mask: sea=0, land=1, ice=2
   end type movement_info
 
   interface mover
-     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d
+     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_int_2d
   end interface mover
 
   interface block_copy
-     module procedure block_copy_phys_4D, block_copy_phys_3D, block_copy_r4_2D, block_copy_r8_2D
+     module procedure block_copy_phys_4D, block_copy_phys_3D, block_copy_r4_2D, block_copy_r8_2D, block_copy_sfcfsw, block_copy_sfcflw, block_copy_int_2d
   end interface block_copy
 
 contains
@@ -350,6 +352,54 @@ contains
 
   end subroutine mn_phys_fill_temp_variables
 
+  pure subroutine block_copy_sfcfsw(mi, mn_phys, block_array)
+    use module_radsw_parameters,  only: sfcfsw_type
+    implicit none
+    type(movement_info), intent(in) :: mi
+    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys !< Physics variables with halos
+    type(sfcfsw_type), intent(inout) :: block_array(:)
+    integer :: ix
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+       do ix = 1, size(block_array,1)
+          block_array(ix)%upfxc = mn_phys%sfcfsw_upfxc(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%upfx0 = mn_phys%sfcfsw_upfx0(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%dnfxc = mn_phys%sfcfsw_dnfxc(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%dnfx0 = mn_phys%sfcfsw_dnfx0(mi%ii(ix),mi%jj(ix))
+       enddo
+    else
+       do ix = 1, size(block_array,1)
+          mn_phys%sfcfsw_upfxc(mi%ii(ix),mi%jj(ix)) = block_array(ix)%upfxc
+          mn_phys%sfcfsw_upfx0(mi%ii(ix),mi%jj(ix)) = block_array(ix)%upfx0
+          mn_phys%sfcfsw_dnfxc(mi%ii(ix),mi%jj(ix)) = block_array(ix)%dnfxc
+          mn_phys%sfcfsw_dnfx0(mi%ii(ix),mi%jj(ix)) = block_array(ix)%dnfx0
+       enddo
+    endif
+  end subroutine block_copy_sfcfsw
+
+  pure subroutine block_copy_sfcflw(mi, mn_phys, block_array)
+    use module_radlw_parameters,  only: sfcflw_type
+    implicit none
+    type(movement_info), intent(in) :: mi
+    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys !< Physics variables with halos
+    type(sfcflw_type), intent(inout) :: block_array(:)
+    integer :: ix
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+       do ix = 1, size(block_array,1)
+          block_array(ix)%upfxc = mn_phys%sfcflw_upfxc(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%upfx0 = mn_phys%sfcflw_upfx0(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%dnfxc = mn_phys%sfcflw_dnfxc(mi%ii(ix),mi%jj(ix))
+          block_array(ix)%dnfx0 = mn_phys%sfcflw_dnfx0(mi%ii(ix),mi%jj(ix))
+       enddo
+    else
+       do ix = 1, size(block_array,1)
+          mn_phys%sfcflw_upfxc(mi%ii(ix),mi%jj(ix)) = block_array(ix)%upfxc
+          mn_phys%sfcflw_upfx0(mi%ii(ix),mi%jj(ix)) = block_array(ix)%upfx0
+          mn_phys%sfcflw_dnfxc(mi%ii(ix),mi%jj(ix)) = block_array(ix)%dnfxc
+          mn_phys%sfcflw_dnfx0(mi%ii(ix),mi%jj(ix)) = block_array(ix)%dnfx0
+       enddo
+    endif
+  end subroutine block_copy_sfcflw
+
   pure subroutine block_copy_phys_4D(mi, work_array, block_array)
     implicit none
     type(movement_info), intent(in) :: mi
@@ -467,6 +517,41 @@ contains
     endif
   end subroutine block_copy_r8_2D
 
+  pure subroutine block_copy_int_2D(mi, work_array, block_array, &
+       if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+    implicit none
+    type(movement_info), intent(in) :: mi
+    integer, intent(inout) :: work_array(mi%isd:,mi%jsd:)
+    integer, intent(inout) :: block_array(:)
+    integer, optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
+    integer :: ix
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+       do ix = 1, size(block_array,1)
+          block_array(ix) = work_array(mi%ii(ix),mi%jj(ix))
+       enddo
+
+       ! Handle missing values. Generally, only one of these blocks will be reached,
+       ! but the logic should work for any combination.
+
+       if(present(if_missing)) then
+          where(block_array>1e6)                          block_array = if_missing
+       endif
+       if(present(if_missing_on_sea)) then
+          where(nint(mi%slmsk)==0 .and. block_array>1e6)  block_array = if_missing_on_sea
+       endif
+       if(present(if_missing_on_land)) then
+          where(nint(mi%slmsk)==1 .and. block_array>1e6)  block_array = if_missing_on_land
+       endif
+       if(present(if_negative)) then
+          where(block_array<0.0)                          block_array = if_negative
+       endif
+    else
+       do ix = 1, size(block_array,1)
+          work_array(mi%ii(ix),mi%jj(ix)) = block_array(ix)
+       enddo
+    endif
+  end subroutine block_copy_int_2D
+
 
   !>@brief The subroutine 'mn_phys_apply_temp_variables' copies moved 2D data back into 1D physics arryas for nest motion
   !>@details This subroutine fills the 1D physics arrays from the mn_phys structure on the Atm object
@@ -521,13 +606,14 @@ contains
        mi%slmsk => GFS_Data(nb)%Sfcprop%slmsk
        mi%mn_phys => mn_phys
 
-       call mn_phys_mover(mi, GFS_Data(nb))
+       call mn_phys_mover(mi, GFS_Data(nb), GFS_Control)
     enddo block_loop
   end subroutine mn_phys_copy_all_blocks
 
-  subroutine mn_phys_mover(mi, GFS_Data, wt_h)
+  subroutine mn_phys_mover(mi, GFS_Data, GFS_Control, wt_h)
     implicit none
     type(movement_info), intent(inout)                       :: mi
+    type(GFS_Control_type), intent(in)                       :: GFS_Control
     type(GFS_data_type), intent(inout)                       :: GFS_Data          !< Physics variable data for the current block
     real, allocatable, intent(in), optional :: wt_h(:,:,:)
     type(fv_moving_nest_physics_type), pointer :: mn_phys
@@ -537,75 +623,270 @@ contains
     mn_phys => mi%mn_phys
 
     if_move_physics: if (move_physics) then
-       call mover_phys_3d(mi, 'smc', mn_phys%smc, GFS_Data%Sfcprop%smc, wt_h)
-       call mover_phys_3d(mi, 'stc', mn_phys%stc, GFS_Data%Sfcprop%stc, wt_h)
-       call mover_phys_3d(mi, 'slc', mn_phys%slc, GFS_Data%Sfcprop%slc, wt_h)
+
+       lsm_choice: if (GFS_Control%lsm == GFS_Control%lsm_noah .or. GFS_Control%lsm == GFS_Control%lsm_noahmp) then
+         call mover_phys_3d(mi, 'smc', mn_phys%smc, GFS_Data%Sfcprop%smc, wt_h=wt_h)
+         call mover_phys_3d(mi, 'stc', mn_phys%stc, GFS_Data%Sfcprop%stc, wt_h=wt_h)
+         call mover_phys_3d(mi, 'slc', mn_phys%slc, GFS_Data%Sfcprop%slc, wt_h=wt_h)
+       elseif (GFS_Control%lsm == GFS_Control%lsm_ruc) then
+         call mover_phys_3d(mi, 'sh2o', mn_phys%sh2o, GFS_Data%Sfcprop%sh2o, wt_h=wt_h)
+         call mover_phys_3d(mi, 'smois', mn_phys%smois, GFS_Data%Sfcprop%smois, wt_h=wt_h)
+         call mover_phys_3d(mi, 'tslb', mn_phys%tslb, GFS_Data%Sfcprop%tslb, wt_h=wt_h)
+       endif lsm_choice
 
        ! EMIS PATCH - When copying back to GFS_Data, force to positive at all locations.
-       call mover_r8_2d(mi, 'emis_lnd', mn_phys%emis_lnd, GFS_Data%Sfcprop%emis_lnd, wt_h, &
+       call mover_r8_2d(mi, 'emis_lnd', mn_phys%emis_lnd, GFS_Data%Sfcprop%emis_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-       call mover_r8_2d(mi, 'emis_ice', mn_phys%emis_ice, GFS_Data%Sfcprop%emis_ice, wt_h, &
+       call mover_r8_2d(mi, 'emis_ice', mn_phys%emis_ice, GFS_Data%Sfcprop%emis_ice, wt_h=wt_h, &
             halo_ice_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-       call mover_r8_2d(mi, 'emis_wat', mn_phys%emis_wat, GFS_Data%Sfcprop%emis_wat, wt_h, &
+       call mover_r8_2d(mi, 'emis_wat', mn_phys%emis_wat, GFS_Data%Sfcprop%emis_wat, wt_h=wt_h, &
             halo_sea_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
 
        ! When copying back to GFS_Data, set albedo values to physically reasonable values if they have negative fill values.
-       call mover_r8_2d(mi, 'albdirvis_lnd ', mn_phys%albdirvis_lnd , GFS_Data%Sfcprop%albdirvis_lnd, wt_h, &
+       call mover_r8_2d(mi, 'albdirvis_lnd ', mn_phys%albdirvis_lnd , GFS_Data%Sfcprop%albdirvis_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-       call mover_r8_2d(mi, 'albdirnir_lnd ', mn_phys%albdirnir_lnd , GFS_Data%Sfcprop%albdirnir_lnd, wt_h, &
+       call mover_r8_2d(mi, 'albdirnir_lnd ', mn_phys%albdirnir_lnd , GFS_Data%Sfcprop%albdirnir_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-       call mover_r8_2d(mi, 'albdifvis_lnd ', mn_phys%albdifvis_lnd , GFS_Data%Sfcprop%albdifvis_lnd, wt_h, &
+       call mover_r8_2d(mi, 'albdifvis_lnd ', mn_phys%albdifvis_lnd , GFS_Data%Sfcprop%albdifvis_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-       call mover_r8_2d(mi, 'albdifnir_lnd ', mn_phys%albdifnir_lnd , GFS_Data%Sfcprop%albdifnir_lnd, wt_h, &
+       call mover_r8_2d(mi, 'albdifnir_lnd ', mn_phys%albdifnir_lnd , GFS_Data%Sfcprop%albdifnir_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
 
-       !call mover_r8_2d(mi, 'sfalb_lnd', mn_phys%sfalb_lnd, GFS_Data%Sfcprop%sfalb_lnd, wt_h)
-       !call mover_r8_2d(mi, 'sfalb_lnd_bck', mn_phys%sfalb_lnd_bck, GFS_Data%Sfcprop%sfalb_lnd_bck, wt_h)
-       !call mover_r8_2d(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h)
-       !call mover_r8_2d(mi, 'semisbase', mn_phys%semisbase, GFS_Data%Sfcprop%semisbase, wt_h)
-       !call mover_r8_2d(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h)
+       !call mover_r8_2d(mi, 'sfalb_lnd', mn_phys%sfalb_lnd, GFS_Data%Sfcprop%sfalb_lnd, wt_h=wt_h)
+       !call mover_r8_2d(mi, 'sfalb_lnd_bck', mn_phys%sfalb_lnd_bck, GFS_Data%Sfcprop%sfalb_lnd_bck, wt_h=wt_h)
+       !call mover_r8_2d(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h=wt_h)
+       !call mover_r8_2d(mi, 'semisbase', mn_phys%semisbase, GFS_Data%Sfcprop%semisbase, wt_h=wt_h)
+       !call mover_r8_2d(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h=wt_h)
 
-       call mover_r8_2d(mi, 'u10m', mn_phys%u10m, GFS_Data%IntDiag%u10m, wt_h)
-       call mover_r8_2d(mi, 'v10m', mn_phys%v10m, GFS_Data%IntDiag%v10m, wt_h)
-       call mover_r8_2d(mi, 'tprcp', mn_phys%tprcp, GFS_Data%Sfcprop%tprcp, wt_h)
+       call mover_r8_2d(mi, 'u10m', mn_phys%u10m, GFS_Data%IntDiag%u10m, wt_h=wt_h)
+       call mover_r8_2d(mi, 'v10m', mn_phys%v10m, GFS_Data%IntDiag%v10m, wt_h=wt_h)
+       call mover_r8_2d(mi, 'tprcp', mn_phys%tprcp, GFS_Data%Sfcprop%tprcp, wt_h=wt_h)
 
-       call mover_phys_3d(mi, 'hprime', mn_phys%hprime, GFS_Data%Sfcprop%hprime, wt_h)
+       call mover_phys_3d(mi, 'hprime', mn_phys%hprime, GFS_Data%Sfcprop%hprime, wt_h=wt_h)
 
-       call mover_r8_2d(mi, 'lakefrac', mn_phys%lakefrac, GFS_Data%Sfcprop%lakefrac, wt_h)
-       call mover_r8_2d(mi, 'lakedepth', mn_phys%lakedepth, GFS_Data%Sfcprop%lakedepth, wt_h)
+       call mover_r8_2d(mi, 'lakefrac', mn_phys%lakefrac, GFS_Data%Sfcprop%lakefrac, wt_h=wt_h)
+       call mover_r8_2d(mi, 'lakedepth', mn_phys%lakedepth, GFS_Data%Sfcprop%lakedepth, wt_h=wt_h)
 
-       call mover_r8_2d(mi, 'canopy', mn_phys%canopy, GFS_Data%Sfcprop%canopy, wt_h)
-       call mover_r8_2d(mi, 'vegfrac', mn_phys%vegfrac, GFS_Data%Sfcprop%vfrac, wt_h)
-       call mover_r8_2d(mi, 'uustar', mn_phys%uustar, GFS_Data%Sfcprop%uustar, wt_h)
-       call mover_r8_2d(mi, 'shdmin', mn_phys%shdmin, GFS_Data%Sfcprop%shdmin, wt_h)
-       call mover_r8_2d(mi, 'shdmax', mn_phys%shdmax, GFS_Data%Sfcprop%shdmax, wt_h)
+       call mover_r8_2d(mi, 'canopy', mn_phys%canopy, GFS_Data%Sfcprop%canopy, wt_h=wt_h)
+       call mover_r8_2d(mi, 'vegfrac', mn_phys%vegfrac, GFS_Data%Sfcprop%vfrac, wt_h=wt_h)
+       call mover_r8_2d(mi, 'uustar', mn_phys%uustar, GFS_Data%Sfcprop%uustar, wt_h=wt_h)
+       call mover_r8_2d(mi, 'shdmin', mn_phys%shdmin, GFS_Data%Sfcprop%shdmin, wt_h=wt_h)
+       call mover_r8_2d(mi, 'shdmax', mn_phys%shdmax, GFS_Data%Sfcprop%shdmax, wt_h=wt_h)
 
        ! When copying back to GFS_Data, set roughness lengths to physically reasonable values if they have
        ! fill value (possible at coastline) sea/land mask array (sea:0,land:1,sea-ice:2)
-       call mover_r8_2d(mi, 'zorll', mn_phys%zorll, GFS_Data%Sfcprop%zorll, wt_h, &
+       call mover_r8_2d(mi, 'zorll', mn_phys%zorll, GFS_Data%Sfcprop%zorll, wt_h=wt_h, &
             halo_land_mask_fill=86.0_kind_phys, if_missing_on_land=82.0_kind_phys)
-       call mover_r8_2d(mi, 'zorlw', mn_phys%zorlw, GFS_Data%Sfcprop%zorlw, wt_h, &
+       call mover_r8_2d(mi, 'zorlw', mn_phys%zorlw, GFS_Data%Sfcprop%zorlw, wt_h=wt_h, &
             halo_land_mask_fill=78.0_kind_phys, if_missing_on_sea=83.0_kind_phys)
-       call mover_r8_2d(mi, 'zorlwav', mn_phys%zorlwav, GFS_Data%Sfcprop%zorlwav, wt_h, &
+       call mover_r8_2d(mi, 'zorlwav', mn_phys%zorlwav, GFS_Data%Sfcprop%zorlwav, wt_h=wt_h, &
             halo_land_mask_fill=77.0_kind_phys, if_missing_on_sea=84.0_kind_phys)
-       call mover_r8_2d(mi, 'usfco', mn_phys%usfco, GFS_Data%Sfcprop%usfco, wt_h, &
+       call mover_r8_2d(mi, 'usfco', mn_phys%usfco, GFS_Data%Sfcprop%usfco, wt_h=wt_h, &
             halo_land_mask_fill=0.0_kind_phys, if_missing_on_sea=0.0_kind_phys)
-       call mover_r8_2d(mi, 'vsfco', mn_phys%vsfco, GFS_Data%Sfcprop%vsfco, wt_h, &
+       call mover_r8_2d(mi, 'vsfco', mn_phys%vsfco, GFS_Data%Sfcprop%vsfco, wt_h=wt_h, &
             halo_land_mask_fill=0.0_kind_phys, if_missing_on_sea=0.0_kind_phys)
 
-       call mover_r8_2d(mi, 'zorl', mn_phys%zorl, GFS_Data%Sfcprop%zorl, wt_h, &
+       call mover_r8_2d(mi, 'zorl', mn_phys%zorl, GFS_Data%Sfcprop%zorl, wt_h=wt_h, &
             if_missing=85.0_kind_phys)
 
-       call mover_r8_2d(mi, 'tsfco', mn_phys%tsfco, GFS_Data%Sfcprop%tsfco, wt_h)
-       call mover_r8_2d(mi, 'tsfcl', mn_phys%tsfcl, GFS_Data%Sfcprop%tsfcl, wt_h)
-       call mover_r8_2d(mi, 'tsfc', mn_phys%tsfc, GFS_Data%Sfcprop%tsfc, wt_h)
+       call mover_r8_2d(mi, 'tsfco', mn_phys%tsfco, GFS_Data%Sfcprop%tsfco, wt_h=wt_h)
+       call mover_r8_2d(mi, 'tsfcl', mn_phys%tsfcl, GFS_Data%Sfcprop%tsfcl, wt_h=wt_h)
+       call mover_r8_2d(mi, 'tsfc', mn_phys%tsfc, GFS_Data%Sfcprop%tsfc, wt_h=wt_h)
 
-       call mover_phys_3d(mi, 'phy_f2d', mn_phys%phy_f2d, GFS_Data%Tbd%phy_f2d, wt_h)
-       call mover_phys_4d(mi, 'phy_f3d', mn_phys%phy_f3d, GFS_Data%Tbd%phy_f3d, wt_h)
+       call mover_phys_3d(mi, 'phy_f2d', mn_phys%phy_f2d, GFS_Data%Tbd%phy_f2d, wt_h=wt_h)
+       call mover_phys_4d(mi, 'phy_f3d', mn_phys%phy_f3d, GFS_Data%Tbd%phy_f3d, wt_h=wt_h)
 
-       call mover_r8_2d(mi, 'cv', mn_phys%cv, GFS_Data%Cldprop%cv, wt_h)
-       call mover_r8_2d(mi, 'cvt', mn_phys%cvt, GFS_Data%Cldprop%cvt, wt_h)
-       call mover_r8_2d(mi, 'cvb', mn_phys%cvb, GFS_Data%Cldprop%cvb, wt_h)
+       call mover_r8_2d(mi, 'cv', mn_phys%cv, GFS_Data%Cldprop%cv, wt_h=wt_h)
+       call mover_r8_2d(mi, 'cvt', mn_phys%cvt, GFS_Data%Cldprop%cvt, wt_h=wt_h)
+       call mover_r8_2d(mi, 'cvb', mn_phys%cvb, GFS_Data%Cldprop%cvb, wt_h=wt_h)
+
+
+       ! --------------------------------------------------------------------------------
+       ! New stuff
+
+       if(.false.) then
+          ! FIXME: This should be in mv_static
+          call mover_int_2d(mi, 'scolor', mn_phys%scolor, GFS_Data%Sfcprop%scolor, wt_h)
+       endif
+
+
+      ! Flake
+      if (GFS_Control%lkm > 0 .and. GFS_Control%iopt_lake==GFS_Control%iopt_lake_flake) then
+        call mover(mi, 'T_snow', mn_phys%T_snow, GFS_Data%Sfcprop%T_snow, wt_h=wt_h)
+        call mover(mi, 'T_ice', mn_phys%T_ice, GFS_Data%Sfcprop%T_ice, wt_h=wt_h)
+        call mover(mi, 'h_ML', mn_phys%h_ML, GFS_Data%Sfcprop%h_ML, wt_h=wt_h)
+        call mover(mi, 't_ML', mn_phys%t_ML, GFS_Data%Sfcprop%t_ML, wt_h=wt_h)
+        call mover(mi, 't_mnw', mn_phys%t_mnw, GFS_Data%Sfcprop%t_mnw, wt_h=wt_h)
+        call mover(mi, 'h_talb', mn_phys%h_talb, GFS_Data%Sfcprop%h_talb, wt_h=wt_h)
+        call mover(mi, 't_talb', mn_phys%t_talb, GFS_Data%Sfcprop%t_talb, wt_h=wt_h)
+        call mover(mi, 't_bot1', mn_phys%t_bot1, GFS_Data%Sfcprop%t_bot1, wt_h=wt_h)
+        call mover(mi, 't_bot2', mn_phys%t_bot2, GFS_Data%Sfcprop%t_bot2, wt_h=wt_h)
+        call mover(mi, 'c_t', mn_phys%c_t, GFS_Data%Sfcprop%c_t, wt_h=wt_h)
+      endif
+
+      if (GFS_Control%lsm == GFS_Control%lsm_ruc) then
+        call mover(mi, 'wetness', mn_phys%wetness, GFS_Data%Sfcprop%wetness, wt_h)
+        call mover(mi, 'clw_surf_land', mn_phys%clw_surf_land, GFS_Data%Sfcprop%clw_surf_land, wt_h)
+        call mover(mi, 'clw_surf_ice', mn_phys%clw_surf_ice, GFS_Data%Sfcprop%clw_surf_ice, wt_h)
+        call mover(mi, 'qwv_surf_land', mn_phys%qwv_surf_land, GFS_Data%Sfcprop%qwv_surf_land, wt_h)
+        call mover(mi, 'qwv_surf_ice', mn_phys%qwv_surf_ice, GFS_Data%Sfcprop%qwv_surf_ice, wt_h)
+        call mover(mi, 'tsnow_land', mn_phys%tsnow_land, GFS_Data%Sfcprop%tsnow_land, wt_h)
+        call mover(mi, 'tsnow_ice', mn_phys%tsnow_ice, GFS_Data%Sfcprop%tsnow_ice, wt_h)
+        call mover(mi, 'snowfallac_land', mn_phys%snowfallac_land, GFS_Data%Sfcprop%snowfallac_land, wt_h)
+        call mover(mi, 'snowfallac_ice', mn_phys%snowfallac_ice, GFS_Data%Sfcprop%snowfallac_ice, wt_h)
+        call mover(mi, 'sfalb_lnd', mn_phys%sfalb_lnd, GFS_Data%Sfcprop%sfalb_lnd, wt_h)
+        call mover(mi, 'sfalb_lnd_bck', mn_phys%sfalb_lnd_bck, GFS_Data%Sfcprop%sfalb_lnd_bck, wt_h)
+        call mover(mi, 'sfalb_ice', mn_phys%sfalb_ice, GFS_Data%Sfcprop%sfalb_ice, wt_h)
+        if (GFS_Control%rdlai) then
+          call mover(mi, 'xlaixy', mn_phys%xlaixy, GFS_Data%Sfcprop%xlaixy, wt_h)
+        endif
+      endif
+
+      !--------------------------------------------------------------------------------
+      ! Everything up to this point does not change the HAFS.
+      !--------------------------------------------------------------------------------
+      
+      if (GFS_Control%use_cice_alb .or. GFS_Control%lsm == GFS_Control%lsm_ruc) then
+       ! When copying back to GFS_Data, set albedo values to physically reasonable values if they have negative fill values.
+         call mover_r8_2d(mi, 'albdirvis_ice', mn_phys%albdirvis_ice , GFS_Data%Sfcprop%albdirvis_ice, wt_h, &
+            halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
+         call mover_r8_2d(mi, 'albdirnir_ice', mn_phys%albdirnir_ice , GFS_Data%Sfcprop%albdirnir_ice, wt_h, &
+            halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
+         call mover_r8_2d(mi, 'albdifvis_ice', mn_phys%albdifvis_ice , GFS_Data%Sfcprop%albdifvis_ice, wt_h, &
+            halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
+         call mover_r8_2d(mi, 'albdifnir_ice', mn_phys%albdifnir_ice , GFS_Data%Sfcprop%albdifnir_ice, wt_h, &
+            halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
+      endif
+      
+      ! FIXME: These should be enabled.
+      disable_the_new_stuff: if(.false.) then
+
+         call mover(mi, 'pgr', mn_phys%pgr, GFS_Data%Statein%pgr, wt_h)
+         call mover(mi, 'tisfc', mn_phys%tisfc, GFS_Data%Sfcprop%tisfc, wt_h)
+         call mover(mi, 'snowd', mn_phys%snowd, GFS_Data%Sfcprop%snowd, wt_h)
+         call mover(mi, 'fice', mn_phys%fice, GFS_Data%Sfcprop%fice, wt_h)
+         call mover(mi, 'sncovr', mn_phys%sncovr, GFS_Data%Sfcprop%sncovr, wt_h)
+         call mover(mi, 'hice', mn_phys%hice, GFS_Data%Sfcprop%hice, wt_h)
+         call mover(mi, 'weasd', mn_phys%weasd, GFS_Data%Sfcprop%weasd, wt_h)
+         call mover(mi, 'ffmm', mn_phys%ffmm, GFS_Data%Sfcprop%ffmm, wt_h)
+         call mover(mi, 'ffhh', mn_phys%ffhh, GFS_Data%Sfcprop%ffhh, wt_h)
+         call mover(mi, 'f10m', mn_phys%f10m, GFS_Data%Sfcprop%f10m, wt_h)
+         call mover(mi, 'srflag', mn_phys%srflag, GFS_Data%Sfcprop%srflag, wt_h)
+         call mover(mi, 't2m', mn_phys%t2m, GFS_Data%Sfcprop%t2m, wt_h=wt_h)
+         call mover(mi, 'q2m', mn_phys%q2m, GFS_Data%Sfcprop%q2m, wt_h=wt_h)
+         call mover(mi, 'nirbmdi', mn_phys%nirbmdi, GFS_Data%Coupling%nirbmdi, wt_h=wt_h)
+         call mover(mi, 'nirdfdi', mn_phys%nirdfdi, GFS_Data%Coupling%nirdfdi, wt_h=wt_h)
+         call mover(mi, 'visbmdi', mn_phys%visbmdi, GFS_Data%Coupling%visbmdi, wt_h=wt_h)
+         call mover(mi, 'visdfdi', mn_phys%visdfdi, GFS_Data%Coupling%visdfdi, wt_h=wt_h)
+         call mover(mi, 'nirbmui', mn_phys%nirbmui, GFS_Data%Coupling%nirbmui, wt_h=wt_h)
+         call mover(mi, 'nirdfui', mn_phys%nirdfui, GFS_Data%Coupling%nirdfui, wt_h=wt_h)
+         call mover(mi, 'visbmui', mn_phys%visbmui, GFS_Data%Coupling%visbmui, wt_h=wt_h)
+         call mover(mi, 'visdfui', mn_phys%visdfui, GFS_Data%Coupling%visdfui, wt_h=wt_h)
+         call mover(mi, 'sfcdsw', mn_phys%sfcdsw, GFS_Data%Coupling%sfcdsw, wt_h=wt_h)
+         call mover(mi, 'sfcnsw', mn_phys%sfcnsw, GFS_Data%Coupling%sfcnsw, wt_h=wt_h)
+         call mover(mi, 'sfcdlw', mn_phys%sfcdlw, GFS_Data%Coupling%sfcdlw, wt_h=wt_h)
+         call mover(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h=wt_h)
+         call mover(mi, 'coszen', mn_phys%coszen, GFS_Data%Radtend%coszen, wt_h=wt_h)
+         call mover(mi, 'tsflw', mn_phys%tsflw, GFS_Data%Radtend%tsflw, wt_h=wt_h)
+         call mover(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h=wt_h)
+         call mover(mi, 'coszdg', mn_phys%coszdg, GFS_Data%Radtend%coszdg, wt_h=wt_h)
+
+         call mover_phys_3d(mi, 'htrsw', mn_phys%htrsw, GFS_Data%Radtend%htrsw, wt_h=wt_h)
+         call mover_phys_3d(mi, 'htrlw', mn_phys%htrlw, GFS_Data%Radtend%htrlw, wt_h=wt_h)
+         call mover_phys_3d(mi, 'swhc', mn_phys%swhc, GFS_Data%Radtend%swhc, wt_h=wt_h)
+         call mover_phys_3d(mi, 'lwhc', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
+
+         rrtmg_types: if(mi%action == DO_COPY_FROM_BLOCK_ARRAYS .or. mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+            ! Copy between arrays of derived type (with no halos) to arrays of reals (with halos).
+            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcfsw)
+            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcflw)
+         else
+            ! While shifting data, everything is already in intrinsic type arrays with halos.
+            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcflw_upfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcflw_upfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcflw_dnfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcflw_dnfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcfsw_upfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcfsw_upfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcfsw_dnfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcfsw_dnfx0, wt_h=wt_h)
+         endif rrtmg_types
+
+         call mover(mi, 'tiice', mn_phys%tiice, GFS_Data%Sfcprop%tiice, wt_h=wt_h)
+         call mover(mi, 'sncovr_ice', mn_phys%sncovr_ice, GFS_Data%Sfcprop%sncovr_ice, wt_h=wt_h)
+
+         lsm_choice_2: if (GFS_Control%lsm == GFS_Control%lsm_noahmp) then
+            call mover(mi, 'snowxy', mn_phys%snowxy, GFS_Data%Sfcprop%snowxy, wt_h=wt_h)
+            call mover(mi, 'tvxy', mn_phys%tvxy, GFS_Data%Sfcprop%tvxy, wt_h=wt_h)
+            call mover(mi, 'tgxy', mn_phys%tgxy, GFS_Data%Sfcprop%tgxy, wt_h=wt_h)
+            call mover(mi, 'canicexy', mn_phys%canicexy, GFS_Data%Sfcprop%canicexy, wt_h=wt_h)
+            call mover(mi, 'canliqxy', mn_phys%canliqxy, GFS_Data%Sfcprop%canliqxy, wt_h=wt_h)
+            call mover(mi, 'eahxy', mn_phys%eahxy, GFS_Data%Sfcprop%eahxy, wt_h=wt_h)
+            call mover(mi, 'tahxy', mn_phys%tahxy, GFS_Data%Sfcprop%tahxy, wt_h=wt_h)
+            call mover(mi, 'cmxy', mn_phys%cmxy, GFS_Data%Sfcprop%cmxy, wt_h=wt_h)
+            call mover(mi, 'chxy', mn_phys%chxy, GFS_Data%Sfcprop%chxy, wt_h=wt_h)
+            call mover(mi, 'fwetxy', mn_phys%fwetxy, GFS_Data%Sfcprop%fwetxy, wt_h=wt_h)
+            call mover(mi, 'sneqvoxy', mn_phys%sneqvoxy, GFS_Data%Sfcprop%sneqvoxy, wt_h=wt_h)
+            call mover(mi, 'alboldxy', mn_phys%alboldxy, GFS_Data%Sfcprop%alboldxy, wt_h=wt_h)
+            call mover(mi, 'qsnowxy', mn_phys%qsnowxy, GFS_Data%Sfcprop%qsnowxy, wt_h=wt_h)
+            call mover(mi, 'wslakexy', mn_phys%wslakexy, GFS_Data%Sfcprop%wslakexy, wt_h=wt_h)
+            call mover(mi, 'zwtxy', mn_phys%zwtxy, GFS_Data%Sfcprop%zwtxy, wt_h=wt_h)
+            call mover(mi, 'waxy', mn_phys%waxy, GFS_Data%Sfcprop%waxy, wt_h=wt_h)
+            call mover(mi, 'wtxy', mn_phys%wtxy, GFS_Data%Sfcprop%wtxy, wt_h=wt_h)
+            call mover(mi, 'lfmassxy', mn_phys%lfmassxy, GFS_Data%Sfcprop%lfmassxy, wt_h=wt_h)
+            call mover(mi, 'rtmassxy', mn_phys%rtmassxy, GFS_Data%Sfcprop%rtmassxy, wt_h=wt_h)
+            call mover(mi, 'stmassxy', mn_phys%stmassxy, GFS_Data%Sfcprop%stmassxy, wt_h=wt_h)
+            call mover(mi, 'woodxy', mn_phys%woodxy, GFS_Data%Sfcprop%woodxy, wt_h=wt_h)
+            call mover(mi, 'stblcpxy', mn_phys%stblcpxy, GFS_Data%Sfcprop%stblcpxy, wt_h=wt_h)
+            call mover(mi, 'fastcpxy', mn_phys%fastcpxy, GFS_Data%Sfcprop%fastcpxy, wt_h=wt_h)
+            call mover(mi, 'xsaixy', mn_phys%xsaixy, GFS_Data%Sfcprop%xsaixy, wt_h=wt_h)
+            call mover(mi, 'xlaixy', mn_phys%xlaixy, GFS_Data%Sfcprop%xlaixy, wt_h=wt_h)
+            call mover(mi, 'taussxy', mn_phys%taussxy, GFS_Data%Sfcprop%taussxy, wt_h=wt_h)
+            call mover(mi, 'smcwtdxy', mn_phys%smcwtdxy, GFS_Data%Sfcprop%smcwtdxy, wt_h=wt_h)
+            call mover(mi, 'deeprechxy', mn_phys%deeprechxy, GFS_Data%Sfcprop%deeprechxy, wt_h=wt_h)
+            call mover(mi, 'rechxy', mn_phys%rechxy, GFS_Data%Sfcprop%rechxy, wt_h=wt_h)
+
+            ! These five arrays use bizarre indexing.
+            !do k=-2,0
+            call mover(mi, 'snicexy', mn_phys%snicexy, GFS_Data%Sfcprop%snicexy, wt_h)
+            !do k=-2,0
+            call mover(mi, 'snliqxy', mn_phys%snliqxy, GFS_Data%Sfcprop%snliqxy, wt_h)
+            !do k=-2,0
+            call mover(mi, 'tsnoxy', mn_phys%tsnoxy, GFS_Data%Sfcprop%tsnoxy, wt_h)
+            !do k=1,4
+            call mover(mi, 'smoiseq', mn_phys%smoiseq, GFS_Data%Sfcprop%smoiseq, wt_h)
+            !do k=-2,4
+            call mover(mi, 'zsnsoxy', mn_phys%zsnsoxy, GFS_Data%Sfcprop%zsnsoxy, wt_h)
+         elseif (GFS_Control%lsm == GFS_Control%lsm_ruc) then
+            ! Already moved up
+         endif lsm_choice_2
+
+         if (GFS_Control%nctp > 0 .and. GFS_Control%cscnv) then
+            call mover(mi, 'phy_fctd', mn_phys%phy_fctd, GFS_Data%Tbd%phy_fctd, wt_h=wt_h)
+         endif
+
+         ! Do we need to move Statein and Stateout variables?
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%phii)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%prsi)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%prsik)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%phil)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%prsl)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%prslk)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%ugrs)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%vgrs)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%vvl)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%tgrs)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Stateout%gu0)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Stateout%gv0)
+         ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Stateout%gt0)
+         ! do k = 1,ntr
+         !   call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Statein%qgrs(:,:,k))
+         !   call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3d,GFS_Data%Stateout%gq0(:,:,k))
+         ! enddo
+      end if disable_the_new_stuff
+
+      ! End of new stuff
+      ! --------------------------------------------------------------------------------
 
        check_stype_vtype: if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
           ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
@@ -651,6 +932,7 @@ contains
        call mover_r8_2d(mi, 'dt_cool', mn_phys%dt_cool, GFS_Data%Sfcprop%dt_cool, wt_h)
        call mover_r8_2d(mi, 'qrain', mn_phys%qrain, GFS_Data%Sfcprop%qrain, wt_h)
     endif if_move_nsst
+    !endif move_other_physics
   end subroutine mn_phys_mover
 
   subroutine mover_r8_2d(mi, name, var, block_array, wt_h, &
@@ -658,7 +940,7 @@ contains
        if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     implicit none
     type(movement_info), intent(in) :: mi
-    real(kind=8), intent(inout) :: block_array(:)
+    real(kind=8), optional, intent(inout) :: block_array(:)
     real(kind=8), optional, intent(in) :: halo_sea_mask_fill, halo_land_mask_fill, halo_ice_mask_fill
     real(kind=8), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
     character(len=*), intent(in) :: name
@@ -707,7 +989,7 @@ contains
        if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     implicit none
     type(movement_info), intent(in) :: mi
-    real(kind=4), intent(inout) :: block_array(:)
+    real(kind=4), optional, intent(inout) :: block_array(:)
     real(kind=4), optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
     character(len=*), intent(in) :: name
     real(kind=4), allocatable, intent(inout) :: var(:,:)
@@ -727,6 +1009,31 @@ contains
        call block_copy(mi, var, block_array, if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     endif
   end subroutine mover_r4_2d
+
+  subroutine mover_int_2d(mi, name, var, block_array, wt_h, &
+       if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+    implicit none
+    type(movement_info), intent(in) :: mi
+    integer, optional, intent(inout) :: block_array(:)
+    integer, optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
+    character(len=*), intent(in) :: name
+    integer, allocatable, intent(inout) :: var(:,:)
+    real, allocatable, intent(in), optional :: wt_h(:,:,:)
+
+    if(mi%action == DO_FILL_NEST_HALOS_FROM_PARENT) then
+       call fill_nest_halos_from_parent(name, var, interp_A_grid, mi%ChildGrid%neststruct%wt_h, & ! mover_r8_2d
+            mi%ChildGrid%neststruct%ind_h, &
+            mi%ChildGrid%neststruct%refinement, mi%ChildGrid%neststruct%refinement, &
+            mi%is_fine_pe, mi%nest_domain, CENTER)
+    else if(mi%action == DO_FILL_INTERN_NEST_HALOS) then
+       call mn_var_fill_intern_nest_halos(var, mi%domain_fine, mi%is_fine_pe)
+    else if(mi%action == DO_SHIFT_DATA) then
+       call mn_var_shift_data(var, 1, wt_h, mi%ChildGrid%neststruct%ind_h, & ! mover_r4_2d
+            mi%delta_i_c, mi%delta_j_c, mi%x_refine, mi%y_refine, mi%is_fine_pe, mi%nest_domain, CENTER)
+    else
+       call block_copy(mi, var, block_array, if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+    endif
+  end subroutine mover_int_2d
 
   subroutine mover_phys_3d(mi, name, var, block_array, wt_h)
     implicit none
@@ -797,7 +1104,7 @@ contains
     
     !  Fill centered-grid variables
 
-    call mn_phys_mover(mi, GFS_Data(1))
+    call mn_phys_mover(mi, GFS_Data(1), GFS_Control)
 
   end subroutine mn_phys_fill_nest_halos_from_parent
 
@@ -819,7 +1126,7 @@ contains
     mi%domain_fine => domain_fine
     mi%is_fine_pe = is_fine_pe
 
-    call mn_phys_mover(mi, GFS_Data(1))
+    call mn_phys_mover(mi, GFS_Data(1), GFS_Control)
 
   end subroutine mn_phys_fill_intern_nest_halos
 
@@ -851,7 +1158,7 @@ contains
     mi%x_refine = x_refine
     mi%y_refine = y_refine
 
-    call mn_phys_mover(mi, GFS_Data(1), wt_h=wt_h)
+    call mn_phys_mover(mi, GFS_Data(1), GFS_Control, wt_h=wt_h)
 
   end subroutine mn_phys_shift_data
 

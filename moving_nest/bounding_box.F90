@@ -44,6 +44,8 @@ module bounding_box_mod
   end type bbox
 
   interface fill_bbox
+    module procedure fill_bbox_int_2d
+    module procedure fill_bbox_int_3d
     module procedure fill_bbox_r4_2d
     module procedure fill_bbox_r4_3d
     module procedure fill_bbox_r4_4d
@@ -53,6 +55,28 @@ module bounding_box_mod
   end interface fill_bbox
 
 contains
+
+  subroutine fill_bbox_int_2d(out_bbox, in_grid)
+    type(bbox), intent(out)         :: out_bbox
+    integer, allocatable, intent(in) :: in_grid(:,:)
+
+    out_bbox%is = lbound(in_grid, 1)
+    out_bbox%ie = ubound(in_grid, 1)
+    out_bbox%js = lbound(in_grid, 2)
+    out_bbox%je = ubound(in_grid, 2)
+  end subroutine fill_bbox_int_2d
+
+
+  subroutine fill_bbox_int_3d(out_bbox, in_grid)
+    type(bbox), intent(out)         :: out_bbox
+    integer, allocatable, intent(in) :: in_grid(:,:,:)
+
+    out_bbox%is = lbound(in_grid, 1)
+    out_bbox%ie = ubound(in_grid, 1)
+    out_bbox%js = lbound(in_grid, 2)
+    out_bbox%je = ubound(in_grid, 2)
+  end subroutine fill_bbox_int_3d
+
 
   subroutine fill_bbox_r4_2d(out_bbox, in_grid)
     type(bbox), intent(out)         :: out_bbox
