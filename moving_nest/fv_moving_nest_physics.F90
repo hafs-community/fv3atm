@@ -741,10 +741,6 @@ contains
           call mover(mi, 'xlaixy', mn_phys%xlaixy, GFS_Data%Sfcprop%xlaixy, wt_h)
         endif
       endif
-
-      !--------------------------------------------------------------------------------
-      ! Everything up to this point does not change the HAFS.
-      !--------------------------------------------------------------------------------
       
       if (GFS_Control%use_cice_alb .or. GFS_Control%lsm == GFS_Control%lsm_ruc) then
        ! When copying back to GFS_Data, set albedo values to physically reasonable values if they have negative fill values.
@@ -757,24 +753,110 @@ contains
          call mover_r8_2d(mi, 'albdifnir_ice', mn_phys%albdifnir_ice , GFS_Data%Sfcprop%albdifnir_ice, wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
       endif
-      
-      ! FIXME: These should be enabled.
-      disable_the_new_stuff: if(.false.) then
+
+      lsm_choice_2: if (GFS_Control%lsm == GFS_Control%lsm_noahmp) then
+         call mover(mi, 'alboldxy', mn_phys%alboldxy, GFS_Data%Sfcprop%alboldxy, wt_h=wt_h)
+         call mover(mi, 'canicexy', mn_phys%canicexy, GFS_Data%Sfcprop%canicexy, wt_h=wt_h)
+         call mover(mi, 'canliqxy', mn_phys%canliqxy, GFS_Data%Sfcprop%canliqxy, wt_h=wt_h)
+         call mover(mi, 'chxy', mn_phys%chxy, GFS_Data%Sfcprop%chxy, wt_h=wt_h)
+         call mover(mi, 'cmxy', mn_phys%cmxy, GFS_Data%Sfcprop%cmxy, wt_h=wt_h)
+         call mover(mi, 'deeprechxy', mn_phys%deeprechxy, GFS_Data%Sfcprop%deeprechxy, wt_h=wt_h)
+         call mover(mi, 'eahxy', mn_phys%eahxy, GFS_Data%Sfcprop%eahxy, wt_h=wt_h)
+         call mover(mi, 'fastcpxy', mn_phys%fastcpxy, GFS_Data%Sfcprop%fastcpxy, wt_h=wt_h)
+         call mover(mi, 'fwetxy', mn_phys%fwetxy, GFS_Data%Sfcprop%fwetxy, wt_h=wt_h)
+         call mover(mi, 'lfmassxy', mn_phys%lfmassxy, GFS_Data%Sfcprop%lfmassxy, wt_h=wt_h)
+         call mover(mi, 'qsnowxy', mn_phys%qsnowxy, GFS_Data%Sfcprop%qsnowxy, wt_h=wt_h)
+         call mover(mi, 'rechxy', mn_phys%rechxy, GFS_Data%Sfcprop%rechxy, wt_h=wt_h)
+         call mover(mi, 'rtmassxy', mn_phys%rtmassxy, GFS_Data%Sfcprop%rtmassxy, wt_h=wt_h)
+         call mover(mi, 'smcwtdxy', mn_phys%smcwtdxy, GFS_Data%Sfcprop%smcwtdxy, wt_h=wt_h)
+         call mover(mi, 'smoiseq', mn_phys%smoiseq, GFS_Data%Sfcprop%smoiseq, wt_h)
+         call mover(mi, 'sneqvoxy', mn_phys%sneqvoxy, GFS_Data%Sfcprop%sneqvoxy, wt_h=wt_h)
+         call mover(mi, 'snicexy', mn_phys%snicexy, GFS_Data%Sfcprop%snicexy, wt_h)
+         call mover(mi, 'snliqxy', mn_phys%snliqxy, GFS_Data%Sfcprop%snliqxy, wt_h)
+         call mover(mi, 'snowxy', mn_phys%snowxy, GFS_Data%Sfcprop%snowxy, wt_h=wt_h)
+         call mover(mi, 'stblcpxy', mn_phys%stblcpxy, GFS_Data%Sfcprop%stblcpxy, wt_h=wt_h)
+         call mover(mi, 'stmassxy', mn_phys%stmassxy, GFS_Data%Sfcprop%stmassxy, wt_h=wt_h)
+         call mover(mi, 'tahxy', mn_phys%tahxy, GFS_Data%Sfcprop%tahxy, wt_h=wt_h)
+         call mover(mi, 'taussxy', mn_phys%taussxy, GFS_Data%Sfcprop%taussxy, wt_h=wt_h)
+         call mover(mi, 'tgxy', mn_phys%tgxy, GFS_Data%Sfcprop%tgxy, wt_h=wt_h)
+         call mover(mi, 'tsnoxy', mn_phys%tsnoxy, GFS_Data%Sfcprop%tsnoxy, wt_h)
+         call mover(mi, 'tvxy', mn_phys%tvxy, GFS_Data%Sfcprop%tvxy, wt_h=wt_h)
+         call mover(mi, 'waxy', mn_phys%waxy, GFS_Data%Sfcprop%waxy, wt_h=wt_h)
+         call mover(mi, 'woodxy', mn_phys%woodxy, GFS_Data%Sfcprop%woodxy, wt_h=wt_h)
+         call mover(mi, 'wslakexy', mn_phys%wslakexy, GFS_Data%Sfcprop%wslakexy, wt_h=wt_h)
+         call mover(mi, 'wtxy', mn_phys%wtxy, GFS_Data%Sfcprop%wtxy, wt_h=wt_h)
+         call mover(mi, 'xlaixy', mn_phys%xlaixy, GFS_Data%Sfcprop%xlaixy, wt_h=wt_h)
+         call mover(mi, 'xsaixy', mn_phys%xsaixy, GFS_Data%Sfcprop%xsaixy, wt_h=wt_h)
+         call mover(mi, 'zsnsoxy', mn_phys%zsnsoxy, GFS_Data%Sfcprop%zsnsoxy, wt_h)
+         call mover(mi, 'zwtxy', mn_phys%zwtxy, GFS_Data%Sfcprop%zwtxy, wt_h=wt_h)
+      endif lsm_choice_2
+
+      if (GFS_Control%nctp > 0 .and. GFS_Control%cscnv) then
+         call mover(mi, 'phy_fctd', mn_phys%phy_fctd, GFS_Data%Tbd%phy_fctd, wt_h=wt_h)
+      endif
+
+
+         rrtmg_types: if(mi%action == DO_COPY_FROM_BLOCK_ARRAYS .or. mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+            ! Copy between arrays of derived type (with no halos) to arrays of reals (with halos).
+            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcfsw)
+            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcflw)
+         else
+            ! While shifting data, everything is already in intrinsic type arrays with halos.
+            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcflw_dnfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcfsw_dnfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcflw_dnfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcfsw_dnfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcflw_upfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcfsw_upfx0, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcflw_upfxc, wt_h=wt_h)
+            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcfsw_upfxc, wt_h=wt_h)
+         endif rrtmg_types
 
          call mover(mi, 'pgr', mn_phys%pgr, GFS_Data%Statein%pgr, wt_h)
          call mover(mi, 'tisfc', mn_phys%tisfc, GFS_Data%Sfcprop%tisfc, wt_h)
          call mover(mi, 'snowd', mn_phys%snowd, GFS_Data%Sfcprop%snowd, wt_h)
          call mover(mi, 'fice', mn_phys%fice, GFS_Data%Sfcprop%fice, wt_h)
-         call mover(mi, 'sncovr', mn_phys%sncovr, GFS_Data%Sfcprop%sncovr, wt_h)
          call mover(mi, 'hice', mn_phys%hice, GFS_Data%Sfcprop%hice, wt_h)
-         call mover(mi, 'weasd', mn_phys%weasd, GFS_Data%Sfcprop%weasd, wt_h)
+         call mover(mi, 'f10m', mn_phys%f10m, GFS_Data%Sfcprop%f10m, wt_h)
          call mover(mi, 'ffmm', mn_phys%ffmm, GFS_Data%Sfcprop%ffmm, wt_h)
          call mover(mi, 'ffhh', mn_phys%ffhh, GFS_Data%Sfcprop%ffhh, wt_h)
-         call mover(mi, 'f10m', mn_phys%f10m, GFS_Data%Sfcprop%f10m, wt_h)
-         call mover(mi, 'srflag', mn_phys%srflag, GFS_Data%Sfcprop%srflag, wt_h)
          call mover(mi, 't2m', mn_phys%t2m, GFS_Data%Sfcprop%t2m, wt_h=wt_h)
          call mover(mi, 'q2m', mn_phys%q2m, GFS_Data%Sfcprop%q2m, wt_h=wt_h)
+
+      !--------------------------------------------------------------------------------
+      ! Everything up to this point does not change the HAFS.
+      !--------------------------------------------------------------------------------
+
+      if(.false.) then
+         !--------------------------------------------------------------------------------
+         ! Everything in this section DOES change the HAFS results.
+         ! They should be enabled anyway, since they're needed by the physics.
+         !--------------------------------------------------------------------------------
+         call mover(mi, 'sncovr', mn_phys%sncovr, GFS_Data%Sfcprop%sncovr, wt_h)
+         call mover(mi, 'weasd', mn_phys%weasd, GFS_Data%Sfcprop%weasd, wt_h)
+         call mover(mi, 'srflag', mn_phys%srflag, GFS_Data%Sfcprop%srflag, wt_h)
+
          call mover(mi, 'nirbmdi', mn_phys%nirbmdi, GFS_Data%Coupling%nirbmdi, wt_h=wt_h)
+
+         call mover(mi, 'sfcdsw', mn_phys%sfcdsw, GFS_Data%Coupling%sfcdsw, wt_h=wt_h)
+         call mover(mi, 'sfcdlw', mn_phys%sfcdlw, GFS_Data%Coupling%sfcdlw, wt_h=wt_h)
+         call mover(mi, 'sfcnsw', mn_phys%sfcnsw, GFS_Data%Coupling%sfcnsw, wt_h=wt_h)
+      endif
+
+         !--------------------------------------------------------------------------------
+         ! Everything in this section is currently under testing
+         !--------------------------------------------------------------------------------
+
+
+      ! FIXME: These should be enabled.
+      disable_the_new_stuff: if(.false.) then
+
+         !--------------------------------------------------------------------------------
+         ! The variables in this section collectively change the HAFS
+         ! results, but I don't know which one is the cuplrit yet.
+         ! --------------------------------------------------------------------------------
+
+
          call mover(mi, 'nirdfdi', mn_phys%nirdfdi, GFS_Data%Coupling%nirdfdi, wt_h=wt_h)
          call mover(mi, 'visbmdi', mn_phys%visbmdi, GFS_Data%Coupling%visbmdi, wt_h=wt_h)
          call mover(mi, 'visdfdi', mn_phys%visdfdi, GFS_Data%Coupling%visdfdi, wt_h=wt_h)
@@ -782,9 +864,11 @@ contains
          call mover(mi, 'nirdfui', mn_phys%nirdfui, GFS_Data%Coupling%nirdfui, wt_h=wt_h)
          call mover(mi, 'visbmui', mn_phys%visbmui, GFS_Data%Coupling%visbmui, wt_h=wt_h)
          call mover(mi, 'visdfui', mn_phys%visdfui, GFS_Data%Coupling%visdfui, wt_h=wt_h)
-         call mover(mi, 'sfcdsw', mn_phys%sfcdsw, GFS_Data%Coupling%sfcdsw, wt_h=wt_h)
-         call mover(mi, 'sfcnsw', mn_phys%sfcnsw, GFS_Data%Coupling%sfcnsw, wt_h=wt_h)
-         call mover(mi, 'sfcdlw', mn_phys%sfcdlw, GFS_Data%Coupling%sfcdlw, wt_h=wt_h)
+
+         !--------------------------------------------------------------------------------
+         ! Everything after here is untested
+         !--------------------------------------------------------------------------------
+
          call mover(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h=wt_h)
          call mover(mi, 'coszen', mn_phys%coszen, GFS_Data%Radtend%coszen, wt_h=wt_h)
          call mover(mi, 'tsflw', mn_phys%tsflw, GFS_Data%Radtend%tsflw, wt_h=wt_h)
@@ -796,74 +880,8 @@ contains
          call mover_phys_3d(mi, 'swhc', mn_phys%swhc, GFS_Data%Radtend%swhc, wt_h=wt_h)
          call mover_phys_3d(mi, 'lwhc', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
 
-         rrtmg_types: if(mi%action == DO_COPY_FROM_BLOCK_ARRAYS .or. mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
-            ! Copy between arrays of derived type (with no halos) to arrays of reals (with halos).
-            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcfsw)
-            call block_copy(mi, mn_phys, GFS_Data%Radtend%sfcflw)
-         else
-            ! While shifting data, everything is already in intrinsic type arrays with halos.
-            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcflw_upfxc, wt_h=wt_h)
-            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcflw_upfx0, wt_h=wt_h)
-            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcflw_dnfxc, wt_h=wt_h)
-            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcflw_dnfx0, wt_h=wt_h)
-            call mover(mi, 'sfcflw_upfxc', mn_phys%sfcfsw_upfxc, wt_h=wt_h)
-            call mover(mi, 'sfcflw_upfx0', mn_phys%sfcfsw_upfx0, wt_h=wt_h)
-            call mover(mi, 'sfcflw_dnfxc', mn_phys%sfcfsw_dnfxc, wt_h=wt_h)
-            call mover(mi, 'sfcflw_dnfx0', mn_phys%sfcfsw_dnfx0, wt_h=wt_h)
-         endif rrtmg_types
-
          call mover(mi, 'tiice', mn_phys%tiice, GFS_Data%Sfcprop%tiice, wt_h=wt_h)
          call mover(mi, 'sncovr_ice', mn_phys%sncovr_ice, GFS_Data%Sfcprop%sncovr_ice, wt_h=wt_h)
-
-         lsm_choice_2: if (GFS_Control%lsm == GFS_Control%lsm_noahmp) then
-            call mover(mi, 'snowxy', mn_phys%snowxy, GFS_Data%Sfcprop%snowxy, wt_h=wt_h)
-            call mover(mi, 'tvxy', mn_phys%tvxy, GFS_Data%Sfcprop%tvxy, wt_h=wt_h)
-            call mover(mi, 'tgxy', mn_phys%tgxy, GFS_Data%Sfcprop%tgxy, wt_h=wt_h)
-            call mover(mi, 'canicexy', mn_phys%canicexy, GFS_Data%Sfcprop%canicexy, wt_h=wt_h)
-            call mover(mi, 'canliqxy', mn_phys%canliqxy, GFS_Data%Sfcprop%canliqxy, wt_h=wt_h)
-            call mover(mi, 'eahxy', mn_phys%eahxy, GFS_Data%Sfcprop%eahxy, wt_h=wt_h)
-            call mover(mi, 'tahxy', mn_phys%tahxy, GFS_Data%Sfcprop%tahxy, wt_h=wt_h)
-            call mover(mi, 'cmxy', mn_phys%cmxy, GFS_Data%Sfcprop%cmxy, wt_h=wt_h)
-            call mover(mi, 'chxy', mn_phys%chxy, GFS_Data%Sfcprop%chxy, wt_h=wt_h)
-            call mover(mi, 'fwetxy', mn_phys%fwetxy, GFS_Data%Sfcprop%fwetxy, wt_h=wt_h)
-            call mover(mi, 'sneqvoxy', mn_phys%sneqvoxy, GFS_Data%Sfcprop%sneqvoxy, wt_h=wt_h)
-            call mover(mi, 'alboldxy', mn_phys%alboldxy, GFS_Data%Sfcprop%alboldxy, wt_h=wt_h)
-            call mover(mi, 'qsnowxy', mn_phys%qsnowxy, GFS_Data%Sfcprop%qsnowxy, wt_h=wt_h)
-            call mover(mi, 'wslakexy', mn_phys%wslakexy, GFS_Data%Sfcprop%wslakexy, wt_h=wt_h)
-            call mover(mi, 'zwtxy', mn_phys%zwtxy, GFS_Data%Sfcprop%zwtxy, wt_h=wt_h)
-            call mover(mi, 'waxy', mn_phys%waxy, GFS_Data%Sfcprop%waxy, wt_h=wt_h)
-            call mover(mi, 'wtxy', mn_phys%wtxy, GFS_Data%Sfcprop%wtxy, wt_h=wt_h)
-            call mover(mi, 'lfmassxy', mn_phys%lfmassxy, GFS_Data%Sfcprop%lfmassxy, wt_h=wt_h)
-            call mover(mi, 'rtmassxy', mn_phys%rtmassxy, GFS_Data%Sfcprop%rtmassxy, wt_h=wt_h)
-            call mover(mi, 'stmassxy', mn_phys%stmassxy, GFS_Data%Sfcprop%stmassxy, wt_h=wt_h)
-            call mover(mi, 'woodxy', mn_phys%woodxy, GFS_Data%Sfcprop%woodxy, wt_h=wt_h)
-            call mover(mi, 'stblcpxy', mn_phys%stblcpxy, GFS_Data%Sfcprop%stblcpxy, wt_h=wt_h)
-            call mover(mi, 'fastcpxy', mn_phys%fastcpxy, GFS_Data%Sfcprop%fastcpxy, wt_h=wt_h)
-            call mover(mi, 'xsaixy', mn_phys%xsaixy, GFS_Data%Sfcprop%xsaixy, wt_h=wt_h)
-            call mover(mi, 'xlaixy', mn_phys%xlaixy, GFS_Data%Sfcprop%xlaixy, wt_h=wt_h)
-            call mover(mi, 'taussxy', mn_phys%taussxy, GFS_Data%Sfcprop%taussxy, wt_h=wt_h)
-            call mover(mi, 'smcwtdxy', mn_phys%smcwtdxy, GFS_Data%Sfcprop%smcwtdxy, wt_h=wt_h)
-            call mover(mi, 'deeprechxy', mn_phys%deeprechxy, GFS_Data%Sfcprop%deeprechxy, wt_h=wt_h)
-            call mover(mi, 'rechxy', mn_phys%rechxy, GFS_Data%Sfcprop%rechxy, wt_h=wt_h)
-
-            ! These five arrays use bizarre indexing.
-            !do k=-2,0
-            call mover(mi, 'snicexy', mn_phys%snicexy, GFS_Data%Sfcprop%snicexy, wt_h)
-            !do k=-2,0
-            call mover(mi, 'snliqxy', mn_phys%snliqxy, GFS_Data%Sfcprop%snliqxy, wt_h)
-            !do k=-2,0
-            call mover(mi, 'tsnoxy', mn_phys%tsnoxy, GFS_Data%Sfcprop%tsnoxy, wt_h)
-            !do k=1,4
-            call mover(mi, 'smoiseq', mn_phys%smoiseq, GFS_Data%Sfcprop%smoiseq, wt_h)
-            !do k=-2,4
-            call mover(mi, 'zsnsoxy', mn_phys%zsnsoxy, GFS_Data%Sfcprop%zsnsoxy, wt_h)
-         elseif (GFS_Control%lsm == GFS_Control%lsm_ruc) then
-            ! Already moved up
-         endif lsm_choice_2
-
-         if (GFS_Control%nctp > 0 .and. GFS_Control%cscnv) then
-            call mover(mi, 'phy_fctd', mn_phys%phy_fctd, GFS_Data%Tbd%phy_fctd, wt_h=wt_h)
-         endif
 
          ! Do we need to move Statein and Stateout variables?
          ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%phii)
