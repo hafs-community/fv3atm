@@ -822,10 +822,14 @@ contains
          call mover(mi, 'ffhh', mn_phys%ffhh, GFS_Data%Sfcprop%ffhh, wt_h)
          call mover(mi, 't2m', mn_phys%t2m, GFS_Data%Sfcprop%t2m, wt_h=wt_h)
          call mover(mi, 'q2m', mn_phys%q2m, GFS_Data%Sfcprop%q2m, wt_h=wt_h)
+         call mover(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h=wt_h)
+         call mover(mi, 'coszdg', mn_phys%coszdg, GFS_Data%Radtend%coszdg, wt_h=wt_h)
+         call mover(mi, 'sncovr_ice', mn_phys%sncovr_ice, GFS_Data%Sfcprop%sncovr_ice, wt_h=wt_h)
 
-      !--------------------------------------------------------------------------------
-      ! Everything up to this point does not change the HAFS.
-      !--------------------------------------------------------------------------------
+         call mover(mi, 'nirbmui', mn_phys%nirbmui, GFS_Data%Coupling%nirbmui, wt_h=wt_h)
+         call mover(mi, 'nirdfui', mn_phys%nirdfui, GFS_Data%Coupling%nirdfui, wt_h=wt_h)
+         call mover(mi, 'visbmui', mn_phys%visbmui, GFS_Data%Coupling%visbmui, wt_h=wt_h)
+         call mover(mi, 'visdfui', mn_phys%visdfui, GFS_Data%Coupling%visdfui, wt_h=wt_h)
 
       if(.false.) then
          !--------------------------------------------------------------------------------
@@ -837,52 +841,29 @@ contains
          call mover(mi, 'srflag', mn_phys%srflag, GFS_Data%Sfcprop%srflag, wt_h)
 
          call mover(mi, 'nirbmdi', mn_phys%nirbmdi, GFS_Data%Coupling%nirbmdi, wt_h=wt_h)
+         call mover(mi, 'nirdfdi', mn_phys%nirdfdi, GFS_Data%Coupling%nirdfdi, wt_h=wt_h)
+         call mover(mi, 'visbmdi', mn_phys%visbmdi, GFS_Data%Coupling%visbmdi, wt_h=wt_h)
+         call mover(mi, 'visdfdi', mn_phys%visdfdi, GFS_Data%Coupling%visdfdi, wt_h=wt_h)
 
          call mover(mi, 'sfcdsw', mn_phys%sfcdsw, GFS_Data%Coupling%sfcdsw, wt_h=wt_h)
          call mover(mi, 'sfcdlw', mn_phys%sfcdlw, GFS_Data%Coupling%sfcdlw, wt_h=wt_h)
          call mover(mi, 'sfcnsw', mn_phys%sfcnsw, GFS_Data%Coupling%sfcnsw, wt_h=wt_h)
-      endif
-
-         !--------------------------------------------------------------------------------
-         ! Everything in this section is currently under testing
-         !--------------------------------------------------------------------------------
-
-
-      ! FIXME: These should be enabled.
-      disable_the_new_stuff: if(.false.) then
-
-         !--------------------------------------------------------------------------------
-         ! The variables in this section collectively change the HAFS
-         ! results, but I don't know which one is the cuplrit yet.
-         ! --------------------------------------------------------------------------------
-
-
-         call mover(mi, 'nirdfdi', mn_phys%nirdfdi, GFS_Data%Coupling%nirdfdi, wt_h=wt_h)
-         call mover(mi, 'visbmdi', mn_phys%visbmdi, GFS_Data%Coupling%visbmdi, wt_h=wt_h)
-         call mover(mi, 'visdfdi', mn_phys%visdfdi, GFS_Data%Coupling%visdfdi, wt_h=wt_h)
-         call mover(mi, 'nirbmui', mn_phys%nirbmui, GFS_Data%Coupling%nirbmui, wt_h=wt_h)
-         call mover(mi, 'nirdfui', mn_phys%nirdfui, GFS_Data%Coupling%nirdfui, wt_h=wt_h)
-         call mover(mi, 'visbmui', mn_phys%visbmui, GFS_Data%Coupling%visbmui, wt_h=wt_h)
-         call mover(mi, 'visdfui', mn_phys%visdfui, GFS_Data%Coupling%visdfui, wt_h=wt_h)
-
-         !--------------------------------------------------------------------------------
-         ! Everything after here is untested
-         !--------------------------------------------------------------------------------
 
          call mover(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h=wt_h)
          call mover(mi, 'coszen', mn_phys%coszen, GFS_Data%Radtend%coszen, wt_h=wt_h)
          call mover(mi, 'tsflw', mn_phys%tsflw, GFS_Data%Radtend%tsflw, wt_h=wt_h)
-         call mover(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h=wt_h)
-         call mover(mi, 'coszdg', mn_phys%coszdg, GFS_Data%Radtend%coszdg, wt_h=wt_h)
 
-         call mover_phys_3d(mi, 'htrsw', mn_phys%htrsw, GFS_Data%Radtend%htrsw, wt_h=wt_h)
-         call mover_phys_3d(mi, 'htrlw', mn_phys%htrlw, GFS_Data%Radtend%htrlw, wt_h=wt_h)
+
          call mover_phys_3d(mi, 'swhc', mn_phys%swhc, GFS_Data%Radtend%swhc, wt_h=wt_h)
          call mover_phys_3d(mi, 'lwhc', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
+         call mover_phys_3d(mi, 'htrsw', mn_phys%htrsw, GFS_Data%Radtend%htrsw, wt_h=wt_h)
+         call mover_phys_3d(mi, 'htrlw', mn_phys%htrlw, GFS_Data%Radtend%htrlw, wt_h=wt_h)
 
          call mover(mi, 'tiice', mn_phys%tiice, GFS_Data%Sfcprop%tiice, wt_h=wt_h)
-         call mover(mi, 'sncovr_ice', mn_phys%sncovr_ice, GFS_Data%Sfcprop%sncovr_ice, wt_h=wt_h)
+      endif
 
+
+      if(.false.) then
          ! Do we need to move Statein and Stateout variables?
          ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%phii)
          ! call copy_from_GFS_Data(ii1,jj1,isc,jsc,nt,temp3dlevsp1, GFS_Data%Statein%prsi)
