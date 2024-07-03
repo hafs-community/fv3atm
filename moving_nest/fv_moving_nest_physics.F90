@@ -125,11 +125,11 @@ module fv_moving_nest_physics_mod
   type(GFS_control_type), pointer               :: save_GFS_Control
   type(GFS_data_type), pointer                  :: save_GFS_Data(:)
 
-  integer, parameter :: DO_FILL_NEST_HALOS_FROM_PARENT = 1
-  integer, parameter :: DO_FILL_INTERN_NEST_HALOS = 2
-  integer, parameter :: DO_SHIFT_DATA = 3
-  integer, parameter :: DO_COPY_TO_BLOCK_ARRAYS = 4
-  integer, parameter :: DO_COPY_FROM_BLOCK_ARRAYS = 5
+  integer, parameter, private :: DO_FILL_NEST_HALOS_FROM_PARENT = 1
+  integer, parameter, private :: DO_FILL_INTERN_NEST_HALOS = 2
+  integer, parameter, private :: DO_SHIFT_DATA = 3
+  integer, parameter, private :: DO_COPY_TO_BLOCK_ARRAYS = 4
+  integer, parameter, private :: DO_COPY_FROM_BLOCK_ARRAYS = 5
 
   type movement_info
     integer :: action = -1 !< One of the five "DO_" parameters in this module
@@ -698,7 +698,7 @@ contains
 
        call mover(mi, 'cv', mn_phys%cv, GFS_Data%Cldprop%cv, wt_h=wt_h)
        call mover(mi, 'cvt', mn_phys%cvt, GFS_Data%Cldprop%cvt, wt_h=wt_h)
-       call mover_r8_2d(mi, 'cvb', mn_phys%cvb, GFS_Data%Cldprop%cvb, wt_h=wt_h)
+       call mover(mi, 'cvb', mn_phys%cvb, GFS_Data%Cldprop%cvb, wt_h=wt_h)
 
 
        ! --------------------------------------------------------------------------------
