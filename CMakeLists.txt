@@ -22,6 +22,7 @@ endif()
 ### CCPP
 ###############################################################################
 
+set(MPI ON)
 add_subdirectory(ccpp)
 
 ###############################################################################
@@ -35,6 +36,9 @@ set(GFS_TYPES   ON)
 set(USE_GFSL63  ON)
 if(MOVING_NEST)
   set(MOVING_NEST ON)
+endif()
+if(HYDRO)
+  set(HYDRO ON)
 endif()
 add_subdirectory(atmos_cubed_sphere)
 target_compile_definitions(fv3 PRIVATE BYPASS_BREED_SLP_INLINE)
@@ -60,7 +64,11 @@ if(NOT PARALLEL_NETCDF)
 endif()
 
 if(MOVING_NEST)
-  list(APPEND _fv3atm_defs_private MOVING_NEST MOIST_CAPPA USE_COND)
+  list(APPEND _fv3atm_defs_private MOVING_NEST)
+  if(NOT HYDRO)
+    list(APPEND _fv3atm_defs_private MOIST_CAPPA USE_COND)
+  endif()
+
   if(DEBUG)
     list(APPEND _fv3atm_defs_private DEBUG)
   endif()
@@ -105,6 +113,7 @@ add_library(fv3atm
   cpl/module_block_data.F90
   cpl/module_cplfields.F90
   cpl/module_cap_cpl.F90
+  cpl/module_cplscalars.F90
   io/fv3atm_common_io.F90
   io/fv3atm_clm_lake_io.F90
   io/fv3atm_rrfs_sd_io.F90
