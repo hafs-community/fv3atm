@@ -114,6 +114,8 @@ module fv_moving_nest_physics_mod
   logical :: move_physics = .true.       ! Always true, unless developer sets move_physics to .False. here for debugging.
   logical :: move_nsst = .true.          ! Value is reset in fv_moving_nest_main.F90 from namelist options
 
+  logical, parameter, private :: omit_hafs_bugs = .true. ! Set to .false. to get original HAFS results which forgot to move some variables
+
   ! FIXME: Put move_hafs_subset in a namelist
 
   integer, parameter, private :: interp_A_grid = 1        ! cell-centered A-grid
@@ -831,7 +833,7 @@ contains
          call mover(mi, 'visbmui', mn_phys%visbmui, GFS_Data%Coupling%visbmui, wt_h=wt_h)
          call mover(mi, 'visdfui', mn_phys%visdfui, GFS_Data%Coupling%visdfui, wt_h=wt_h)
 
-      if(.false.) then
+      if(omit_hafs_bugs) then
          !--------------------------------------------------------------------------------
          ! Everything in this section DOES change the HAFS results.
          ! They should be enabled anyway, since they're needed by the physics.
