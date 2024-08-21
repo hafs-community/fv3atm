@@ -101,7 +101,7 @@ use fv3atm_restart_io_mod,    only: fv3atm_restart_register, &
 use fv_ufs_restart_io_mod,    only: fv_dyn_restart_register, &
                                     fv_dyn_restart_output
 use fv_iau_mod,         only: iau_external_data_type,getiauforcing,iau_initialize
-use module_fv3_config,  only: first_kdt, nsout, output_fh,               &
+use module_fv3_config,  only: first_kdt, output_fh,                      &
                               fcst_mpi_comm, fcst_ntasks,                &
                               quilting_restart
 use module_block_data,  only: block_atmos_copy, block_data_copy,         &
@@ -450,7 +450,7 @@ subroutine update_atmos_radiation_physics (Atmos)
 !   variable type are allocated for the global grid (without halo regions).
 ! </INOUT>
 subroutine atmos_timestep_diagnostics(Atmos)
-  use mpi
+  use mpi_f08
   implicit none
   type (atmos_data_type), intent(in) :: Atmos
 !--- local variables---
@@ -533,12 +533,12 @@ subroutine atmos_model_init (Atmos, Time_init, Time, Time_step)
   type (time_type), intent(in) :: Time_init, Time, Time_step
 !--- local variables ---
   integer :: unit, i
-  integer :: mlon, mlat, nlon, nlat, nlev, sec
+  integer :: mlon, mlat, nlon, nlat, nlev, sec, sec_lastfhzerofh
   integer :: ierr, io, logunit
   integer :: tile_num
   integer :: isc, iec, jsc, jec
   real(kind=GFS_kind_phys) :: dt_phys
-  logical              :: p_hydro, hydro
+  logical              :: p_hydro, hydro, tmpflag_fhzero
   logical, save        :: block_message = .true.
   type(GFS_init_type)  :: Init_parm
   integer              :: bdat(8), cdat(8)
@@ -582,7 +582,8 @@ subroutine atmos_model_init (Atmos, Time_init, Time, Time_step)
    call atmosphere_diag_axes (Atmos%axes)
    call atmosphere_etalvls (Atmos%ak, Atmos%bk, flip=flip_vc)
 
-   call atmosphere_control_data (isc, iec, jsc, jec, nlev, p_hydro, hydro, tile_num)
+   tile_num=-1
+   call atmosphere_control_data (isc, iec, jsc, jec, nlev, p_hydro, hydro, global_tile_num=tile_num)
 
    allocate (Atmos%lon(nlon,nlat), Atmos%lat(nlon,nlat))
    call atmosphere_grid_ctr (Atmos%lon, Atmos%lat)
@@ -788,8 +789,33 @@ subroutine atmos_model_init (Atmos, Time_init, Time, Time_step)
    !--- WARNING: For special cases that model needs to restart at non-multiple of fhzero
    !--- the fields in first output files are not accumulated from the beginning of
    !--- the bucket, but the restart time.
-   if (mod(sec,int(GFS_Control%fhzero*3600.)) /= 0) then
-     diag_time = Time - real_to_time_type(mod(int((GFS_Control%kdt - 1)*dt_phys/3600.),int(GFS_Control%fhzero))*3600.0)
+   if( GFS_Control%fhzero_array(1) > 0. ) then
+     fhzero_loop: do i=1,size(GFS_Control%fhzero_array)
+       tmpflag_fhzero= .false.
+       if( GFS_Control%fhzero_array(i) > 0.) then
+         if( i == 1 ) then
+           if( sec <= GFS_Control%fhzero_fhour(i)*3600. ) tmpflag_fhzero = .true.
+         else if( i > 1 ) then
+           if( sec > GFS_Control%fhzero_fhour(i-1)*3600. .and. sec <=GFS_Control%fhzero_fhour(i)*3600. ) &
+             tmpflag_fhzero = .true.
+         endif
+         if( tmpflag_fhzero ) then
+           GFS_Control%fhzero = GFS_Control%fhzero_array(i)
+           if( GFS_Control%fhzero > 0) then
+             sec_lastfhzerofh = (int(sec/3600.)/int(GFS_Control%fhzero))*int(GFS_Control%fhzero)*3600
+           else
+             sec_lastfhzerofh = 0
+           endif
+         endif
+       endif
+     enddo fhzero_loop
+   else
+     sec_lastfhzerofh = 0
+   endif
+   if (mpp_pe() == mpp_root_pe()) print *,'in atmos_model, fhzero=',GFS_Control%fhzero, 'fhour=',sec/3600.,sec_lastfhzerofh/3600
+
+   if (mod((sec-sec_lastfhzerofh),int(GFS_Control%fhzero*3600.)) /= 0) then
+     diag_time = Time - real_to_time_type(mod(int((GFS_Control%kdt - 1)*dt_phys-sec_lastfhzerofh),int(GFS_Control%fhzero))*3600.0)
      if (mpp_pe() == mpp_root_pe()) print *,'Warning: in atmos_init,start at non multiple of fhzero'
    endif
    if (Atmos%iau_offset > zero) then
@@ -948,8 +974,9 @@ subroutine update_atmos_model_state (Atmos, rc)
   type (atmos_data_type), intent(inout) :: Atmos
   integer, optional,      intent(out)   :: rc
 !--- local variables
-  integer :: localrc
+  integer :: i, localrc, sec_lastfhzerofh
   integer :: isec, seconds, isec_fhzero
+  logical :: tmpflag_fhzero
   real(kind=GFS_kind_phys) :: time_int, time_intfull
 !
     if (present(rc)) rc = ESMF_SUCCESS
@@ -976,7 +1003,7 @@ subroutine update_atmos_model_state (Atmos, rc)
     call get_time (Atmos%Time - diag_time, isec)
     call get_time (Atmos%Time - Atmos%Time_init, seconds)
     call atmosphere_nggps_diag(Atmos%Time,ltavg=.true.,avg_max_length=avg_max_length)
-    if (ANY(nint(output_fh(:)*3600.0) == seconds) .or. (GFS_control%kdt == first_kdt) .or. nsout > 0) then
+    if (ANY(nint(output_fh(:)*3600.0) == seconds) .or. (GFS_control%kdt == first_kdt)) then
       if (mpp_pe() == mpp_root_pe()) write(6,*) "---isec,seconds",isec,seconds
       time_int = real(isec)
       if(Atmos%iau_offset > zero) then
@@ -1000,16 +1027,38 @@ subroutine update_atmos_model_state (Atmos, rc)
                             GFS_control%levs, 1, 1, 1.0_GFS_kind_phys, time_int, time_intfull, &
                             GFS_control%fhswr, GFS_control%fhlwr)
     endif
-    if (nint(GFS_control%fhzero) > 0) then
-      if (mod(isec,3600*nint(GFS_control%fhzero)) == 0) diag_time = Atmos%Time
+
+    !---  find current fhzero
+    if( GFS_Control%fhzero_array(1) > 0. ) then
+      fhzero_loop: do i=1,size(GFS_Control%fhzero_array)
+        tmpflag_fhzero = .false.
+        if( GFS_Control%fhzero_array(i) > 0.) then
+          if( i == 1 ) then
+            if( seconds <= GFS_Control%fhzero_fhour(i)*3600. ) tmpflag_fhzero = .true.
+          else if( i > 1 ) then
+            if( seconds > GFS_Control%fhzero_fhour(i-1)*3600. .and. seconds <= GFS_Control%fhzero_fhour(i)*3600. ) &
+              tmpflag_fhzero = .true.
+          endif
+          if( tmpflag_fhzero) then
+            GFS_Control%fhzero = GFS_Control%fhzero_array(i)
+            if( GFS_Control%fhzero > 0) then
+              sec_lastfhzerofh = (int(seconds/3600.)/int(GFS_Control%fhzero))*int(GFS_Control%fhzero)*3600
+            else
+              sec_lastfhzerofh = 0
+            endif
+          endif
+        endif
+      enddo fhzero_loop
     else
-      if (mod(isec,nint(3600*GFS_control%fhzero)) == 0) diag_time = Atmos%Time
+      sec_lastfhzerofh = 0
+    endif
+    if (mpp_pe() == mpp_root_pe()) print *,'in atmos_model update, fhzero=',GFS_Control%fhzero, 'fhour=',seconds/3600.,sec_lastfhzerofh/3600.
+
+    if (nint(GFS_Control%fhzero) > 0) then
+      if (mod(isec - sec_lastfhzerofh,nint(GFS_Control%fhzero*3600.)) == 0) diag_time = Atmos%Time
+!    if (mpp_pe() == mpp_root_pe()) print *,'in atmos_model update time=',isec/3600.,'last fhzeo=',sec_lastfhzerofh
     endif
     call diag_send_complete_instant (Atmos%Time)
-
-
-    !--- this may not be necessary once write_component is fully implemented
-    !!!call diag_send_complete_extra (Atmos%Time)
 
     !--- get bottom layer data from dynamical core for coupling
     call atmosphere_get_bottom_layer (Atm_block, DYCORE_Data)
@@ -1914,14 +1963,17 @@ end subroutine update_atmos_chemistry
                 do i=isc,iec
                   nb = Atm_block%blkno(i,j)
                   ix = Atm_block%ixp(i,j)
-                  if (GFS_data(nb)%Sfcprop%oceanfrac(ix) > zero .and.  datar8(i,j) > zorlmin) then
-                    tem = 100.0_GFS_kind_phys * min(0.1_GFS_kind_phys, datar8(i,j))
-!                   GFS_data(nb)%Coupling%zorlwav_cpl(ix) = tem
-                    GFS_data(nb)%Sfcprop%zorlwav(ix)      = tem
-                    GFS_data(nb)%Sfcprop%zorlw(ix)        = tem
-                  else
-                    GFS_data(nb)%Sfcprop%zorlwav(ix) = -999.0_GFS_kind_phys
-
+!                 if (GFS_data(nb)%Sfcprop%oceanfrac(ix) > zero .and.  datar8(i,j) > zorlmin) then
+                  if (GFS_data(nb)%Sfcprop%oceanfrac(ix) > zero) then
+                    if (mergeflg(i,j)) datar8(i,j)=GFS_data(nb)%Sfcprop%zorlw(ix) ! use initial value
+                      if (datar8(i,j) > zorlmin) then
+                        tem = 100.0_GFS_kind_phys * min(0.1_GFS_kind_phys, datar8(i,j))
+!                       GFS_data(nb)%Coupling%zorlwav_cpl(ix) = tem
+                        GFS_data(nb)%Sfcprop%zorlwav(ix)      = tem
+                        GFS_data(nb)%Sfcprop%zorlw(ix)        = tem
+                      else
+                        GFS_data(nb)%Sfcprop%zorlwav(ix) = -999.0_GFS_kind_phys
+                      endif
                   endif
                 enddo
               enddo
@@ -1974,6 +2026,58 @@ end subroutine update_atmos_chemistry
                 enddo
               enddo
               if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'get sst from mediator'
+            endif
+          endif
+
+! get zonal ocean current:
+!--------------------------------------------------------------------------
+          fldname = 'ocn_current_zonal'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cplocn2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  GFS_Data(nb)%Sfcprop%usfco(ix) = zero
+                  if (GFS_Data(nb)%Sfcprop%oceanfrac(ix) > zero) then  ! ocean points
+                    if(mergeflg(i,j)) then
+                     GFS_Data(nb)%Sfcprop%usfco(ix)       =  zero
+                      datar8(i,j) = zero
+                    else
+                      GFS_Data(nb)%Sfcprop%usfco(ix)       = datar8(i,j)
+                    endif
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'get usfco from mediator'
+            endif
+          endif
+
+! get meridional ocean current:
+!--------------------------------------------------------------------------
+          fldname = 'ocn_current_merid'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cplocn2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  GFS_Data(nb)%Sfcprop%vsfco(ix) = zero
+                  if (GFS_Data(nb)%Sfcprop%oceanfrac(ix) > zero) then  ! ocean points
+                    if(mergeflg(i,j)) then
+                     GFS_Data(nb)%Sfcprop%vsfco(ix)       =  zero
+                      datar8(i,j) = zero
+                    else
+                      GFS_Data(nb)%Sfcprop%vsfco(ix)       = datar8(i,j)
+                    endif
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'get vsfco from mediator'
             endif
           endif
 
@@ -2346,6 +2450,266 @@ end subroutine update_atmos_chemistry
                 enddo
               enddo
               if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get merid_moment_flx for open ocean from mediator'
+            endif
+          endif
+
+! get surface snow area fraction: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_snow_area_fraction_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%sncovr1_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get snow area fraction from land'
+            endif
+          endif
+
+! get latent heat flux: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_laten_heat_flx_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%evap_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get latent heat flux from land'
+            endif
+          endif
+
+! get sensible heat flux: over land (if cpllnd=true and cpllnd2atm=true)
+!--------------------------------------------------
+          fldname = 'inst_sensi_heat_flx_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%hflx_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get sensible heat flux from land'
+            endif
+          endif
+
+! get surface upward potential latent heat flux: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_potential_laten_heat_flx_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%ep_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get potential latent heat flux from land'
+            endif
+          endif
+
+! get 2m air temperature: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_temp_height2m_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%t2mmp_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get temperature at 2m from land'
+            endif
+          endif
+
+! get 2m specific humidity: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_spec_humid_height2m_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%q2mp_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get specific humidity at 2m from land'
+            endif
+          endif
+
+! get specific humidity: over land (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_spec_humid_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%qsurf_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get specific humidity from land'
+            endif
+          endif
+
+! get upward heat flux in soil (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_upward_heat_flux_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%gflux_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get upward heat flux from land'
+            endif
+          endif
+
+! get surface runoff in soil (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_runoff_rate_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%runoff_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get surface runoff from land'
+            endif
+          endif
+
+! get subsurface runoff in soil (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_subsurface_runoff_rate_lnd'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%drain_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get subsurface runoff from land'
+            endif
+          endif
+
+! get momentum exchange coefficient (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_drag_wind_speed_for_momentum'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%cmm_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get drag wind speed for momentum from land'
+            endif
+          endif
+
+! get thermal exchange coefficient (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_drag_mass_flux_for_heat_and_moisture'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%chh_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get thermal exchange coefficient form land'
+            endif
+          endif
+
+! get function of surface roughness length and green vegetation fraction (if cpllnd=true and cpllnd2atm=true)
+!------------------------------------------------
+          fldname = 'inst_func_of_roughness_length_and_vfrac'
+          if (trim(impfield_name) == trim(fldname)) then
+            findex  = queryImportFields(fldname)
+            if (importFieldsValid(findex) .and. GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+!$omp parallel do default(shared) private(i,j,nb,ix)
+              do j=jsc,jec
+                do i=isc,iec
+                  nb = Atm_block%blkno(i,j)
+                  ix = Atm_block%ixp(i,j)
+                  if (GFS_data(nb)%Sfcprop%landfrac(ix) > zero) then
+                    GFS_data(nb)%Coupling%zvfun_lnd(ix) = datar8(i,j)
+                  endif
+                enddo
+              enddo
+              if (mpp_pe() == mpp_root_pe() .and. debug)  print *,'fv3 assign_import: get func. of roughness length and vfrac form land'
             endif
           endif
 
@@ -2830,7 +3194,8 @@ end subroutine update_atmos_chemistry
 
     use ESMF
 
-    use module_cplfields, only: exportFields, chemistryFieldNames
+    use module_cplfields,  only: exportFields, chemistryFieldNames
+    use module_cplscalars, only: flds_scalar_name
 
     !--- arguments
     integer, optional, intent(out) :: rc
@@ -2880,33 +3245,36 @@ end subroutine update_atmos_chemistry
       if (isFound) then
         call ESMF_FieldGet(exportFields(n), name=fieldname, rank=rank, typekind=datatype, rc=localrc)
         if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
-        if (datatype == ESMF_TYPEKIND_R8) then
-           select case (rank)
-             case (2)
-               call ESMF_FieldGet(exportFields(n),farrayPtr=datar82d,localDE=0, rc=localrc)
-               if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
-             case (3)
-               call ESMF_FieldGet(exportFields(n),farrayPtr=datar83d,localDE=0, rc=localrc)
-               if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
-             case default
-               !--- skip field
-               isFound = .false.
-           end select
-        else if (datatype == ESMF_TYPEKIND_R4) then
-           select case (rank)
-             case (2)
-               call ESMF_FieldGet(exportFields(n),farrayPtr=datar42d,localDE=0, rc=localrc)
-               if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
-             case default
-               !--- skip field
-               isFound = .false.
-           end select
-        else
-          !--- skip field
+        if (trim(fieldname) == trim(flds_scalar_name)) then
           isFound = .false.
+        else
+          if (datatype == ESMF_TYPEKIND_R8) then
+            select case (rank)
+            case (2)
+              call ESMF_FieldGet(exportFields(n),farrayPtr=datar82d,localDE=0, rc=localrc)
+              if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
+            case (3)
+              call ESMF_FieldGet(exportFields(n),farrayPtr=datar83d,localDE=0, rc=localrc)
+              if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
+            case default
+              !--- skip field
+              isFound = .false.
+            end select
+          else if (datatype == ESMF_TYPEKIND_R4) then
+            select case (rank)
+            case (2)
+              call ESMF_FieldGet(exportFields(n),farrayPtr=datar42d,localDE=0, rc=localrc)
+              if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
+            case default
+              !--- skip field
+              isFound = .false.
+            end select
+          else
+            !--- skip field
+            isFound = .false.
+          end if
         end if
       end if
-
       !--- skip field if only required for chemistry
       if (isFound .and. GFS_control%cplchm) isFound = .not.any(trim(fieldname) == chemistryFieldNames)
 
@@ -3072,12 +3440,6 @@ end subroutine update_atmos_chemistry
             ! bottom layer meridional wind (v)
             case('inst_merid_wind_height_lowest')
               call block_data_copy_or_fill(datar82d, DYCORE_data(nb)%coupling%v_bot, zeror8, Atm_block, nb, rc=localrc)
-            ! bottom layer zonal wind (u) from physics
-            case('inst_zonal_wind_height_lowest_from_phys')
-              call block_data_copy_or_fill(datar82d, GFS_data(nb)%Statein%ugrs, 1, zeror8, Atm_block, nb, rc=localrc)
-            ! bottom layer meridional wind (v) from physics
-            case('inst_merid_wind_height_lowest_from_phys')
-              call block_data_copy_or_fill(datar82d, GFS_data(nb)%Statein%vgrs, 1, zeror8, Atm_block, nb, rc=localrc)
             ! surface friction velocity
             case('surface_friction_velocity')
               call block_data_copy_or_fill(datar82d, GFS_data(nb)%Sfcprop%uustar, zeror8, Atm_block, nb, rc=localrc)

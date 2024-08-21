@@ -827,19 +827,19 @@ contains
 313 format(A15,", ",                                 &
         "W10 = ",F7.3," kn, PMIN = ",F8.3," mbar, ", &
         "LAT = ",F6.3,A1,", LON = ",F7.3,A1,", ",    &
-        "RMW = ",F7.3," nmi")
+        "RMW = ",F7.3," nmi, NEST_IS = ",I6,", NEST_JS = ",I6)
     if (Tracker(n)%tracker_fixlon .gt. 180.0) then
       write(Moving_nest(n)%mn_flag%outatcf_lun+Atm%grid_number,313) timestr,    &
           Tracker(n)%tracker_vmax*mps2kn,Tracker(n)%tracker_pmin/100.,          &
           abs(Tracker(n)%tracker_fixlat),get_lat_ns(Tracker(n)%tracker_fixlat), &
           abs(Tracker(n)%tracker_fixlon-360.0),get_lon_ew(Tracker(n)%tracker_fixlon-360.0), &
-          Tracker(n)%tracker_rmw*km2nmi
+          Tracker(n)%tracker_rmw*km2nmi,Atm%neststruct%ioffset,Atm%neststruct%joffset
     else
       write(Moving_nest(n)%mn_flag%outatcf_lun+Atm%grid_number,313) timestr,    &
           Tracker(n)%tracker_vmax*mps2kn,Tracker(n)%tracker_pmin/100.,          &
           abs(Tracker(n)%tracker_fixlat),get_lat_ns(Tracker(n)%tracker_fixlat), &
           abs(Tracker(n)%tracker_fixlon),get_lon_ew(Tracker(n)%tracker_fixlon), &
-          Tracker(n)%tracker_rmw*km2nmi
+          Tracker(n)%tracker_rmw*km2nmi,Atm%neststruct%ioffset,Atm%neststruct%joffset
     end if
   end subroutine output_partial_atcfunix
 
