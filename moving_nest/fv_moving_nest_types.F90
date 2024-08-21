@@ -305,15 +305,15 @@ module fv_moving_nest_types_mod
     real(kind_phys), allocatable :: smoiseq(:,:,:)
     real(kind_phys), allocatable :: zsnsoxy(:,:,:)
 
-    real(kind_phys), allocatable :: wetness(:,:)
-    real(kind_phys), allocatable :: clw_surf_land(:,:)
-    real(kind_phys), allocatable :: clw_surf_ice(:,:)
-    real(kind_phys), allocatable :: qwv_surf_land(:,:)
-    real(kind_phys), allocatable :: qwv_surf_ice(:,:)
-    real(kind_phys), allocatable :: tsnow_land(:,:)
-    real(kind_phys), allocatable :: tsnow_ice(:,:)
-    real(kind_phys), allocatable :: snowfallac_land(:,:)
-    real(kind_phys), allocatable :: snowfallac_ice(:,:)
+    real(kind_phys), allocatable :: wetness(:,:)  !< normalized soil wetness for lsm
+    real(kind_phys), allocatable :: clw_surf_land(:,:)  !< RUC LSM: moist cloud water mixing ratio at surface over land
+    real(kind_phys), allocatable :: clw_surf_ice(:,:)  !< RUC LSM: moist cloud water mixing ratio at surface over ice
+    real(kind_phys), allocatable :: qwv_surf_land(:,:)  !< RUC LSM: water vapor mixing ratio at surface over land
+    real(kind_phys), allocatable :: qwv_surf_ice(:,:)  !< RUC LSM: water vapor mixing ratio at surface over ice
+    real(kind_phys), allocatable :: tsnow_land(:,:)  !< RUC LSM: snow temperature at the bottom of the first snow layer over land
+    real(kind_phys), allocatable :: tsnow_ice(:,:)  !< RUC LSM: snow temperature at the bottom of the first snow layer over ice
+    real(kind_phys), allocatable :: snowfallac_land(:,:)  !< ruc lsm diagnostics over land
+    real(kind_phys), allocatable :: snowfallac_ice(:,:)  !< ruc lsm diagnostics over ice
     real(kind_phys), allocatable :: sfalb_ice(:,:)
 
     real(kind_phys), allocatable :: T_snow(:,:)
@@ -331,6 +331,177 @@ module fv_moving_nest_types_mod
     real(kind_phys), allocatable :: htrlw(:,:,:)
     real(kind_phys), allocatable :: swhc(:,:,:)
     real(kind_phys), allocatable :: lwhc(:,:,:)
+
+
+
+    ! LAST END POINT
+
+    ! ------------------------------------------------------------
+    ! Coupling
+
+    ! RRTMGP
+    real(kind_phys), allocatable :: fluxlwUP_jac(:,:,:)  !< RRTMGP Jacobian of upward longwave all-sky flux
+    real(kind_phys), allocatable :: fluxlwUP_radtime(:,:,:)  !< RRTMGP upward   longwave  all-sky flux profile
+    real(kind_phys), allocatable :: fluxlwDOWN_radtime(:,:,:)  !< RRTMGP downward  longwave  all-sky flux profile
+    real(kind_phys), allocatable :: tsfc_radtime(:,:)  !< RRTMGP surface temperature on radiation timestep
+
+    !--- variables needed for cpllnd = .TRUE. and cpllnd2atm=.TRUE.
+    real(kind_phys), allocatable :: sncovr1_lnd(:,:) !< sfc snow area fraction over land
+    real(kind_phys), allocatable :: qsurf_lnd(:,:)   !< sfc specific humidity
+    real(kind_phys), allocatable :: evap_lnd(:,:)    !< sfc latent heat flux over land, converted to evaporative flux
+    real(kind_phys), allocatable :: hflx_lnd(:,:)    !< sfc sensible heat flux over land
+    real(kind_phys), allocatable :: ep_lnd(:,:)      !< sfc up pot latent heat flux over land
+    real(kind_phys), allocatable :: t2mmp_lnd(:,:)   !< 2 meter temperature over land 
+    real(kind_phys), allocatable :: q2mp_lnd(:,:)    !< 2 meter spec humidity over land
+    real(kind_phys), allocatable :: gflux_lnd(:,:)   !< soil heat flux over land
+    real(kind_phys), allocatable :: runoff_lnd(:,:)  !< surface runoff over land
+    real(kind_phys), allocatable :: drain_lnd(:,:)   !< subsurface runoff over land
+    real(kind_phys), allocatable :: cmm_lnd(:,:)     !< surface drag wind speed for momentum
+    real(kind_phys), allocatable :: chh_lnd(:,:)     !< surface drag mass flux for heat and moisture 
+    real(kind_phys), allocatable :: zvfun_lnd(:,:)   !< function of surface roughness length and green vegetation fraction 
+
+    !--- outgoing accumulated quantities
+    real(kind_phys), allocatable :: rain_cpl  (:,:)   !< total rain precipitation
+    real(kind_phys), allocatable :: rainc_cpl (:,:)   !< convective rain precipitation
+    real(kind_phys), allocatable :: snow_cpl  (:,:)   !< total snow precipitation
+    real(kind_phys), allocatable :: dlwsfc_cpl(:,:)   !< sfc downward lw flux (w/m**2)
+    real(kind_phys), allocatable :: dswsfc_cpl(:,:)   !< sfc downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: nswsfc_cpl(:,:)   !< net downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: nnirbm_cpl(:,:)   !< net nir beam downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: nnirdf_cpl(:,:)   !< net nir diff downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: nvisbm_cpl(:,:)   !< net uv+vis beam downward sw rad flux (w/m**2)
+    real(kind_phys), allocatable :: nvisdf_cpl(:,:)   !< net uv+vis diff downward sw rad flux (w/m**2)
+    real(kind_phys), allocatable :: dusfc_cpl (:,:)   !< sfc u momentum flux
+    real(kind_phys), allocatable :: dvsfc_cpl (:,:)   !< sfc v momentum flux
+    real(kind_phys), allocatable :: dtsfc_cpl (:,:)   !< sfc sensible heat flux
+    real(kind_phys), allocatable :: dqsfc_cpl (:,:)   !< sfc   latent heat flux
+    real(kind_phys), allocatable :: dnirbm_cpl(:,:)   !< sfc nir beam downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: dnirdf_cpl(:,:)   !< sfc nir diff downward sw flux (w/m**2)
+    real(kind_phys), allocatable :: dvisbm_cpl(:,:)   !< sfc uv+vis beam dnwd sw flux (w/m**2)
+    real(kind_phys), allocatable :: dvisdf_cpl(:,:)   !< sfc uv+vis diff dnwd sw flux (w/m**2)
+    real(kind_phys), allocatable :: nlwsfc_cpl(:,:)   !< net downward lw flux (w/m**2)
+
+    !--- outgoing instantaneous quantities
+    real(kind_phys), allocatable :: dusfci_cpl (:,:)   !< instantaneous sfc u momentum flux
+    real(kind_phys), allocatable :: dvsfci_cpl (:,:)   !< instantaneous sfc v momentum flux
+    real(kind_phys), allocatable :: dtsfci_cpl (:,:)   !< instantaneous sfc sensible heat flux
+    real(kind_phys), allocatable :: dnirbmi_cpl(:,:)   !< instantaneous sfc nir beam downward sw flux
+    real(kind_phys), allocatable :: dnirdfi_cpl(:,:)   !< instantaneous sfc nir diff downward sw flux
+    real(kind_phys), allocatable :: dvisbmi_cpl(:,:)   !< instantaneous sfc uv+vis beam downward sw flux
+    real(kind_phys), allocatable :: dvisdfi_cpl(:,:)   !< instantaneous sfc uv+vis diff downward sw flux
+    real(kind_phys), allocatable :: nlwsfci_cpl(:,:)   !< instantaneous net sfc downward lw flux
+    real(kind_phys), allocatable :: dqsfci_cpl (:,:)   !< instantaneous sfc   latent heat flux
+    real(kind_phys), allocatable :: u10mi_cpl  (:,:)   !< instantaneous U10m
+    real(kind_phys), allocatable :: v10mi_cpl  (:,:)   !< instantaneous V10m
+    real(kind_phys), allocatable :: tsfci_cpl  (:,:)   !< instantaneous sfc temperature
+    real(kind_phys), allocatable :: dlwsfci_cpl(:,:)   !< instantaneous sfc downward lw flux
+    real(kind_phys), allocatable :: dswsfci_cpl(:,:)   !< instantaneous sfc downward sw flux
+    real(kind_phys), allocatable :: psurfi_cpl (:,:)   !< instantaneous sfc pressure
+    real(kind_phys), allocatable :: nswsfci_cpl(:,:)   !< instantaneous net sfc downward sw flux
+    real(kind_phys), allocatable :: nnirbmi_cpl(:,:)   !< instantaneous net nir beam sfc downward sw flux
+    real(kind_phys), allocatable :: nnirdfi_cpl(:,:)   !< instantaneous net nir diff sfc downward sw flux
+    real(kind_phys), allocatable :: nvisbmi_cpl(:,:)   !< instantaneous net uv+vis beam downward sw flux
+    real(kind_phys), allocatable :: nvisdfi_cpl(:,:)   !< instantaneous net uv+vis diff downward sw flux
+    real(kind_phys), allocatable :: t2mi_cpl   (:,:)   !< instantaneous T2m
+    real(kind_phys), allocatable :: q2mi_cpl   (:,:)   !< instantaneous Q2m
+
+    !--- topography-based information for the coupling system
+    real(kind_phys), allocatable :: oro_cpl    (:,:)   !< orography          (  oro from GFS_sfcprop_type)
+    real(kind_phys), allocatable :: slmsk_cpl  (:,:)   !< Land/Sea/Ice mask  (slmsk from GFS_sfcprop_type)
+
+    !--- incoming quantities
+    real(kind_phys), allocatable :: dusfcin_cpl(:,:)   !< aoi_fld%dusfcin(item,lan)
+    real(kind_phys), allocatable :: dvsfcin_cpl(:,:)   !< aoi_fld%dvsfcin(item,lan)
+    real(kind_phys), allocatable :: dtsfcin_cpl(:,:)   !< aoi_fld%dtsfcin(item,lan)
+    real(kind_phys), allocatable :: dqsfcin_cpl(:,:)   !< aoi_fld%dqsfcin(item,lan)
+    real(kind_phys), allocatable :: ulwsfcin_cpl(:,:)   !< aoi_fld%ulwsfcin(item,lan)
+    real(kind_phys), allocatable :: hsnoin_cpl(:,:)   !< aoi_fld%hsnoin(item,lan)
+    !--- variables needed for use_med_flux =.TRUE.
+    real(kind_phys), allocatable :: dusfcin_med(:,:)   !< sfc u momentum flux over ocean
+    real(kind_phys), allocatable :: dvsfcin_med(:,:)   !< sfc v momentum flux over ocean
+    real(kind_phys), allocatable :: dtsfcin_med(:,:)   !< sfc latent heat flux over ocean
+    real(kind_phys), allocatable :: dqsfcin_med(:,:)   !< sfc sensible heat flux over ocean
+    real(kind_phys), allocatable :: ulwsfcin_med(:,:)   !< sfc upward lw flux over ocean
+    !--- also needed for ice/ocn coupling
+    real(kind_phys), allocatable :: slimskin_cpl(:,:)   !< aoi_fld%slimskin(item,lan)
+
+
+    ! ------------------------------------------------------------
+    ! Radtend
+    real(kind_phys), allocatable :: lwhd (:,:,:)  !< idea sky lw heating rates ( k/s ) !DJS2023 THIS IS NOT USED. IT IS REFERENCED, BUT NEVER SET?
+
+    ! ------------------------------------------------------------
+    ! Sfcprop
+    real(kind_phys), allocatable :: weasdl (:,:)  !< weasd over land
+    real(kind_phys), allocatable :: snodl  (:,:)  !< snow depth over land
+    real(kind_phys), allocatable :: th2m   (:,:)  !< 2 meter potential temperature
+    real(kind_phys), allocatable :: semisbase(:,:)  !< background surface emissivity
+    ! Soil properties for RUC LSM (number of levels different from NOAH 4-layer model)
+    ! i,j,lsoil_lsm
+    real(kind_phys), allocatable :: keepsmfr(:,:,:)  !< RUC LSM: frozen moisture in soil
+    real(kind_phys), allocatable :: flag_frsoil(:,:,:)  !< RUC LSM: flag for frozen soil physics
+    ! i,j
+    real(kind_phys), allocatable :: rhofr(:,:)  !< RUC LSM: internal density of frozen precipitation
+    real(kind_phys), allocatable :: acsnow_land(:,:)  !< ruc lsm diagnostics over land
+    real(kind_phys), allocatable :: acsnow_ice(:,:)  !< ruc lsm diagnostics over ice
+    real(kind_phys), allocatable :: fire_heat_flux   (:,:) !< heat flux from wildfire
+    real(kind_phys), allocatable :: frac_grid_burned (:,:) !< fraction of grid cell burning
+
+    ! ------------------------------------------------------------
+    ! Tbd
+
+    real(kind_phys), allocatable :: rann     (:,:,:) !< random number array (0-1)
+    real(kind_phys), allocatable :: acv      (:,:) !< array containing accumulated convective clouds
+    real(kind_phys), allocatable :: acvb     (:,:) !< arrays used by cnvc90 bottom
+    real(kind_phys), allocatable :: acvt     (:,:) !< arrays used by cnvc90 top (cnvc90.f)
+    real(kind_phys), allocatable :: drain_cpl (:,:) !< change in rain_cpl (coupling_type)
+    real(kind_phys), allocatable :: dsnow_cpl (:,:) !< change in show_cpl (coupling_type)
+
+    ! GF, C3, and tiedtke variables from TBD, (i,j,nlevs)
+    real(kind_phys), allocatable :: forcet(:,:,:)
+    real(kind_phys), allocatable :: forceq(:,:,:)
+
+    ! GF and C3 variables from TBD (i,j)
+    integer,         allocatable :: cactiv(:,:)
+    integer,         allocatable :: cactiv_m(:,:)
+
+    !--- MYJ schemes saved variables (from previous time step) from TBD (i,j)
+    real(kind_phys), allocatable :: phy_myj_qsfc(:,:)
+    real(kind_phys), allocatable :: phy_myj_thz0(:,:)
+    real(kind_phys), allocatable :: phy_myj_qz0(:,:)
+    real(kind_phys), allocatable :: phy_myj_uz0(:,:)
+    real(kind_phys), allocatable :: phy_myj_vz0(:,:)
+    real(kind_phys), allocatable :: phy_myj_akhs(:,:)
+    real(kind_phys), allocatable :: phy_myj_akms(:,:)
+    real(kind_phys), allocatable :: phy_myj_chkqlm(:,:)
+    real(kind_phys), allocatable :: phy_myj_elflx(:,:)
+    real(kind_phys), allocatable :: phy_myj_a1u(:,:)
+    real(kind_phys), allocatable :: phy_myj_a1t(:,:)
+    real(kind_phys), allocatable :: phy_myj_a1q(:,:)
+
+    ! MYNN variables from DIAG; (i,j) or (i,j,nlevs)
+    real(kind_phys), allocatable :: edmf_a     (:,:,:)  !
+    real(kind_phys), allocatable :: edmf_w     (:,:,:)  !
+    real(kind_phys), allocatable :: edmf_qt    (:,:,:)  !
+    real(kind_phys), allocatable :: edmf_thl   (:,:,:)  !
+    real(kind_phys), allocatable :: edmf_ent   (:,:,:)  !
+    real(kind_phys), allocatable :: edmf_qc    (:,:,:)  !
+    real(kind_phys), allocatable :: sub_thl    (:,:,:)  !
+    real(kind_phys), allocatable :: sub_sqv    (:,:,:)  !
+    real(kind_phys), allocatable :: det_thl    (:,:,:)  !
+    real(kind_phys), allocatable :: det_sqv    (:,:,:)  !
+    real(kind_phys), allocatable :: dqke       (:,:,:)  !< timestep change of tke
+    real(kind_phys), allocatable :: qwt        (:,:,:)  !< vertical transport of tke
+    real(kind_phys), allocatable :: qshear     (:,:,:)  !< shear production of tke
+    real(kind_phys), allocatable :: qbuoy      (:,:,:)  !< buoyancy production of tke
+    real(kind_phys), allocatable :: qdiss      (:,:,:)  !< dissipation of tke
+
+    real(kind_phys), allocatable :: maxwidth    (:,:)  !
+    real(kind_phys), allocatable :: maxMF       (:,:)  !
+    real(kind_phys), allocatable :: ztop_plume  (:,:)  !
+    integer,         allocatable :: ktop_plume  (:,:)  !
+    real(kind_phys), allocatable :: exch_h    (:,:,:)  !
+    real(kind_phys), allocatable :: exch_m    (:,:,:)  !
 
   contains
 
@@ -520,7 +691,8 @@ contains
     logical :: move_physics, move_nsst
 
     interface alloc_dealloc
-       procedure alloc_dealloc_2d_r4, alloc_dealloc_2d_r8, alloc_dealloc_3d, alloc_dealloc_4d, alloc_dealloc_2d_int
+       procedure alloc_dealloc_2d_r4, alloc_dealloc_2d_r8, alloc_dealloc_3d, alloc_dealloc_4d, &
+                 alloc_dealloc_2d_int, alloc_dealloc_3d_int
     end interface alloc_dealloc
 
     ! Copy these to locals to reduce typing
@@ -535,7 +707,7 @@ contains
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
     call alloc_dealloc(mn_phys%ts)
 
-    if (move_physics) then
+    if_move_physics: if (move_physics) then
        call alloc_dealloc(mn_phys%slmsk)
 
        call alloc_dealloc(mn_phys%emis_lnd)
@@ -579,7 +751,6 @@ contains
        call alloc_dealloc(mn_phys%tsfco)
        call alloc_dealloc(mn_phys%tsfcl)
        call alloc_dealloc(mn_phys%tsfc)
-       !call alloc_dealloc(mn_phys%tsfc_radtime)
 
        call alloc_dealloc(mn_phys%albdirvis_lnd)
        call alloc_dealloc(mn_phys%albdirnir_lnd)
@@ -731,9 +902,233 @@ contains
        call alloc_dealloc(mn_phys%htrlw, GFS_Control%levs)
        call alloc_dealloc(mn_phys%swhc, GFS_Control%levs)
        call alloc_dealloc(mn_phys%lwhc, GFS_Control%levs)
-    end if
 
-    if (move_nsst) then
+       !------------------------------------------------------------------------
+       ! NEW CHANGES
+       
+       ! ------------------------------------------------------------
+       ! Coupling
+       
+       if (GFS_control%do_RRTMGP) then
+          call alloc_dealloc(mn_phys%fluxlwUP_radtime, GFS_control%levs+1)
+          call alloc_dealloc(mn_phys%fluxlwDOWN_radtime, GFS_control%levs+1)
+          call alloc_dealloc(mn_phys%fluxlwUP_jac, GFS_control%levs+1)
+          call alloc_dealloc(mn_phys%tsfc_radtime)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%do_sppt .or. GFS_control%cplchm .or. GFS_control%ca_global .or. GFS_control%cpllnd) then
+          call alloc_dealloc(mn_phys%rain_cpl)
+          call alloc_dealloc(mn_phys%snow_cpl)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cplwav) then
+          !--- instantaneous quantities
+          call alloc_dealloc(mn_phys%u10mi_cpl)
+          call alloc_dealloc(mn_phys%v10mi_cpl)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
+          !--- instantaneous quantities
+          call alloc_dealloc(mn_phys%tsfci_cpl)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cpllnd) then
+          call alloc_dealloc(mn_phys%dlwsfci_cpl)
+          call alloc_dealloc(mn_phys%dswsfci_cpl)
+          call alloc_dealloc(mn_phys%dlwsfc_cpl)
+          call alloc_dealloc(mn_phys%dswsfc_cpl)
+          call alloc_dealloc(mn_phys%psurfi_cpl)
+          call alloc_dealloc(mn_phys%nswsfc_cpl)
+          call alloc_dealloc(mn_phys%nswsfci_cpl)
+          call alloc_dealloc(mn_phys%nnirbmi_cpl)
+          call alloc_dealloc(mn_phys%nnirdfi_cpl)
+          call alloc_dealloc(mn_phys%nvisbmi_cpl)
+          call alloc_dealloc(mn_phys%nvisdfi_cpl)
+          call alloc_dealloc(mn_phys%nnirbm_cpl)
+          call alloc_dealloc(mn_phys%nnirdf_cpl)
+          call alloc_dealloc(mn_phys%nvisbm_cpl)
+          call alloc_dealloc(mn_phys%nvisdf_cpl)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cpllnd) then
+          call alloc_dealloc(mn_phys%dlwsfci_cpl)
+          call alloc_dealloc(mn_phys%dswsfci_cpl)
+          call alloc_dealloc(mn_phys%dlwsfc_cpl)
+          call alloc_dealloc(mn_phys%dswsfc_cpl)
+          call alloc_dealloc(mn_phys%psurfi_cpl)
+          call alloc_dealloc(mn_phys%nswsfc_cpl)
+          call alloc_dealloc(mn_phys%nswsfci_cpl)
+          call alloc_dealloc(mn_phys%nnirbmi_cpl)
+          call alloc_dealloc(mn_phys%nnirdfi_cpl)
+          call alloc_dealloc(mn_phys%nvisbmi_cpl)
+          call alloc_dealloc(mn_phys%nvisdfi_cpl)
+          call alloc_dealloc(mn_phys%nnirbm_cpl)
+          call alloc_dealloc(mn_phys%nnirdf_cpl)
+          call alloc_dealloc(mn_phys%nvisbm_cpl)
+          call alloc_dealloc(mn_phys%nvisdf_cpl)
+       end if
+
+       if (GFS_control%cplflx) then
+          !--- incoming quantities
+          call alloc_dealloc(mn_phys%slimskin_cpl)
+          call alloc_dealloc(mn_phys%dusfcin_cpl)
+          call alloc_dealloc(mn_phys%dvsfcin_cpl)
+          call alloc_dealloc(mn_phys%dtsfcin_cpl)
+          call alloc_dealloc(mn_phys%dqsfcin_cpl)
+          call alloc_dealloc(mn_phys%ulwsfcin_cpl)
+          call alloc_dealloc(mn_phys%hsnoin_cpl)
+
+          ! -- Coupling options to retrive atmosphere-ocean fluxes from mediator
+          if (GFS_control%use_med_flux) then
+             call alloc_dealloc(mn_phys%dusfcin_med)
+             call alloc_dealloc(mn_phys%dvsfcin_med)
+             call alloc_dealloc(mn_phys%dtsfcin_med)
+             call alloc_dealloc(mn_phys%dqsfcin_med)
+             call alloc_dealloc(mn_phys%ulwsfcin_med)
+          end if
+
+          !--- accumulated quantities
+          call alloc_dealloc(mn_phys%dusfc_cpl)
+          call alloc_dealloc(mn_phys%dvsfc_cpl)
+          call alloc_dealloc(mn_phys%dtsfc_cpl)
+          call alloc_dealloc(mn_phys%dqsfc_cpl)
+          call alloc_dealloc(mn_phys%dnirbm_cpl)
+          call alloc_dealloc(mn_phys%dnirdf_cpl)
+          call alloc_dealloc(mn_phys%dvisbm_cpl)
+          call alloc_dealloc(mn_phys%dvisdf_cpl)
+          call alloc_dealloc(mn_phys%nlwsfc_cpl)
+
+          !--- instantaneous quantities
+          call alloc_dealloc(mn_phys%dusfci_cpl)
+          call alloc_dealloc(mn_phys%dvsfci_cpl)
+          call alloc_dealloc(mn_phys%dtsfci_cpl)
+          call alloc_dealloc(mn_phys%dqsfci_cpl)
+          call alloc_dealloc(mn_phys%dnirbmi_cpl)
+          call alloc_dealloc(mn_phys%dnirdfi_cpl)
+          call alloc_dealloc(mn_phys%dvisbmi_cpl)
+          call alloc_dealloc(mn_phys%dvisdfi_cpl)
+          call alloc_dealloc(mn_phys%nlwsfci_cpl)
+          call alloc_dealloc(mn_phys%t2mi_cpl)
+          call alloc_dealloc(mn_phys%q2mi_cpl)
+          call alloc_dealloc(mn_phys%oro_cpl)
+          call alloc_dealloc(mn_phys%slmsk_cpl)
+       endif
+
+       ! -- Coupling options to retrive land fluxes from external land component 
+       if (GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+          call alloc_dealloc(mn_phys%sncovr1_lnd)
+          call alloc_dealloc(mn_phys%qsurf_lnd)
+          call alloc_dealloc(mn_phys%evap_lnd)
+          call alloc_dealloc(mn_phys%hflx_lnd)
+          call alloc_dealloc(mn_phys%ep_lnd)
+          call alloc_dealloc(mn_phys%t2mmp_lnd)
+          call alloc_dealloc(mn_phys%q2mp_lnd)
+          call alloc_dealloc(mn_phys%gflux_lnd)
+          call alloc_dealloc(mn_phys%runoff_lnd)
+          call alloc_dealloc(mn_phys%drain_lnd)
+          call alloc_dealloc(mn_phys%cmm_lnd)
+          call alloc_dealloc(mn_phys%chh_lnd)
+          call alloc_dealloc(mn_phys%zvfun_lnd)
+       endif
+
+       ! ------------------------------------------------------------
+       ! Radtend
+       call alloc_dealloc(mn_phys%lwhd, 6)
+
+       ! ------------------------------------------------------------
+       ! Sfcprop
+       call alloc_dealloc(mn_phys%weasdl)
+       call alloc_dealloc(mn_phys%snodl)
+       call alloc_dealloc(mn_phys%th2m)
+       call alloc_dealloc(mn_phys%semisbase)
+
+       if (GFS_control%lsm == GFS_control%lsm_ruc) then
+          ! For land surface models with different numbers of levels than the four NOAH levels
+          call alloc_dealloc(mn_phys%keepsmfr, GFS_control%lsoil_lsm)
+          call alloc_dealloc(mn_phys%flag_frsoil, GFS_control%lsoil_lsm)
+          call alloc_dealloc(mn_phys%rhofr)
+          call alloc_dealloc(mn_phys%acsnow_land)
+          call alloc_dealloc(mn_phys%acsnow_ice)
+          call alloc_dealloc(mn_phys%fire_heat_flux)
+          call alloc_dealloc(mn_phys%frac_grid_burned)
+       endif
+
+       ! ------------------------------------------------------------
+       ! Tbd
+
+       call alloc_dealloc(mn_phys%rann, GFS_control%nrcm)
+
+       call alloc_dealloc(mn_phys%acv)
+       call alloc_dealloc(mn_phys%acvb)
+       call alloc_dealloc(mn_phys%acvt)
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
+          call alloc_dealloc(mn_phys%drain_cpl)
+          call alloc_dealloc(mn_phys%dsnow_cpl)
+       endif
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call alloc_dealloc(mn_phys%forcet, GFS_control%levs)
+          call alloc_dealloc(mn_phys%forceq, GFS_control%levs)
+       end if
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call alloc_dealloc(mn_phys%cactiv)
+          call alloc_dealloc(mn_phys%cactiv_m)
+       endif
+
+       if (GFS_control%do_myjsfc.or.GFS_control%do_myjpbl) then
+          call alloc_dealloc(mn_phys%phy_myj_qsfc)
+          call alloc_dealloc(mn_phys%phy_myj_thz0)
+          call alloc_dealloc(mn_phys%phy_myj_qz0)
+          call alloc_dealloc(mn_phys%phy_myj_uz0)
+          call alloc_dealloc(mn_phys%phy_myj_vz0)
+          call alloc_dealloc(mn_phys%phy_myj_akhs)
+          call alloc_dealloc(mn_phys%phy_myj_akms)
+          call alloc_dealloc(mn_phys%phy_myj_chkqlm)
+          call alloc_dealloc(mn_phys%phy_myj_elflx)
+          call alloc_dealloc(mn_phys%phy_myj_a1u)
+          call alloc_dealloc(mn_phys%phy_myj_a1t)
+          call alloc_dealloc(mn_phys%phy_myj_a1q)
+       end if
+
+       ! ------------------------------------------------------------
+       ! GFS_Typedefs Diag type
+
+       if (GFS_control%do_mynnedmf) then
+          if (GFS_control%bl_mynn_output .ne. 0) then
+             call alloc_dealloc(mn_phys%edmf_a, GFS_control%levs)
+             call alloc_dealloc(mn_phys%edmf_w, GFS_control%levs)
+             call alloc_dealloc(mn_phys%edmf_qt, GFS_control%levs)
+             call alloc_dealloc(mn_phys%edmf_thl, GFS_control%levs)
+             call alloc_dealloc(mn_phys%edmf_ent, GFS_control%levs)
+             call alloc_dealloc(mn_phys%edmf_qc, GFS_control%levs)
+             call alloc_dealloc(mn_phys%sub_thl, GFS_control%levs)
+             call alloc_dealloc(mn_phys%sub_sqv, GFS_control%levs)
+             call alloc_dealloc(mn_phys%det_thl, GFS_control%levs)
+             call alloc_dealloc(mn_phys%det_sqv, GFS_control%levs)
+          endif
+          if (GFS_control%tke_budget .gt. 0) then
+             call alloc_dealloc(mn_phys%dqke, GFS_control%levs)
+             call alloc_dealloc(mn_phys%qwt, GFS_control%levs)
+             call alloc_dealloc(mn_phys%qshear, GFS_control%levs)
+             call alloc_dealloc(mn_phys%qbuoy, GFS_control%levs)
+             call alloc_dealloc(mn_phys%qdiss, GFS_control%levs)
+          endif
+          call alloc_dealloc(mn_phys%maxwidth)
+          call alloc_dealloc(mn_phys%maxmf)
+          call alloc_dealloc(mn_phys%ztop_plume)
+          call alloc_dealloc(mn_phys%ktop_plume)
+          call alloc_dealloc(mn_phys%exch_h, GFS_control%levs)
+          call alloc_dealloc(mn_phys%exch_m, GFS_control%levs)
+       end if
+
+
+       ! END OF NEW CHANGES
+       !------------------------------------------------------------------------
+    endif if_move_physics
+
+    if (GFS_control%nstf_name(1) > 0) then
        call alloc_dealloc(mn_phys%tref)
        call alloc_dealloc(mn_phys%z_c)
        call alloc_dealloc(mn_phys%c_0)
@@ -808,6 +1203,20 @@ contains
          var = +99999.9
       endif
     end subroutine alloc_dealloc_3d
+
+    subroutine alloc_dealloc_3d_int(var, kdim)
+      implicit none
+      integer, allocatable :: var(:,:,:)
+      integer, intent(in) :: kdim
+
+      if(allocated(var)) then
+         deallocate(var)
+      endif
+      if(to_alloc) then
+         allocate(var(isd:ied, jsd:jed, kdim))
+         var = +99999
+      endif
+    end subroutine alloc_dealloc_3d_int
 
     subroutine alloc_dealloc_4d(var, kdim, mdim)
       implicit none

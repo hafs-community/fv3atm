@@ -152,11 +152,11 @@ module fv_moving_nest_physics_mod
   end type movement_info
 
   interface mover
-     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_int_2d
+     module procedure mover_r4_2d, mover_r8_2d, mover_phys_3d, mover_phys_4d, mover_int_2d, mover_int_3d
   end interface mover
 
   interface block_copy
-     module procedure block_copy_phys_4D, block_copy_phys_3D, block_copy_r4_2D, block_copy_r8_2D, block_copy_sfcfsw, block_copy_sfcflw, block_copy_int_2d
+     module procedure block_copy_phys_4D, block_copy_phys_3D, block_copy_r4_2D, block_copy_r8_2D, block_copy_sfcfsw, block_copy_sfcflw, block_copy_int_2d, block_copy_int_3d
   end interface block_copy
 
 contains
@@ -554,6 +554,61 @@ contains
     endif
   end subroutine block_copy_int_2D
 
+  pure subroutine block_copy_int_3D(mi, work_array, block_array, &
+       if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
+    implicit none
+    type(movement_info), intent(in) :: mi
+    integer, intent(inout) :: work_array(mi%isd:,mi%jsd:,:)
+    integer, intent(inout) :: block_array(:,:)
+    integer, optional, intent(in) :: if_missing, if_missing_on_sea, if_missing_on_land, if_negative
+    integer :: ix, k
+    if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
+       do k = lbound(block_array,2), ubound(block_array,2)
+          do ix = 1, size(block_array,1)
+             block_array(ix, k) = work_array(mi%ii(ix),mi%jj(ix),k)
+          enddo
+       enddo
+
+       ! Handle missing values. Generally, only one of these blocks will be reached,
+       ! but the logic should work for any combination.
+
+       if(present(if_missing)) then
+          where(block_array>1e6)
+             block_array = if_missing
+          end where
+       endif
+       if(present(if_missing_on_sea)) then
+          do k = lbound(block_array,2), ubound(block_array,2)
+             do ix = 1, size(block_array,1)
+                if(nint(mi%slmsk(ix))==0 .and. block_array(ix,k)>1e6) then
+                   block_array(ix,k) = if_missing_on_sea
+                endif
+             enddo
+          enddo
+       endif
+       if(present(if_missing_on_land)) then
+          do k = lbound(block_array,2), ubound(block_array,2)
+             do ix = 1, size(block_array,1)
+                if(nint(mi%slmsk(ix))==1 .and. block_array(ix,k)>1e6) then
+                   block_array(ix,k) = if_missing_on_land
+                endif
+             enddo
+          enddo
+       endif
+       if(present(if_negative)) then
+          where(block_array<0.0)
+             block_array = if_negative
+          end where
+       endif
+    else
+       do k = lbound(block_array,2), ubound(block_array,2)
+          do ix = 1, size(block_array,1)
+             work_array(mi%ii(ix),mi%jj(ix),k) = block_array(ix,k)
+          enddo
+       enddo
+    endif
+  end subroutine block_copy_int_3D
+
 
   !>@brief The subroutine 'mn_phys_apply_temp_variables' copies moved 2D data back into 1D physics arryas for nest motion
   !>@details This subroutine fills the 1D physics arrays from the mn_phys structure on the Atm object
@@ -653,12 +708,6 @@ contains
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
        call mover(mi, 'albdifnir_lnd ', mn_phys%albdifnir_lnd , GFS_Data%Sfcprop%albdifnir_lnd, wt_h=wt_h, &
             halo_land_mask_fill=0.5_kind_phys, if_negative=0.5_kind_phys)
-
-       !call mover(mi, 'sfalb_lnd', mn_phys%sfalb_lnd, GFS_Data%Sfcprop%sfalb_lnd, wt_h=wt_h)
-       !call mover(mi, 'sfalb_lnd_bck', mn_phys%sfalb_lnd_bck, GFS_Data%Sfcprop%sfalb_lnd_bck, wt_h=wt_h)
-       !call mover(mi, 'semis', mn_phys%semis, GFS_Data%Radtend%semis, wt_h=wt_h)
-       !call mover(mi, 'semisbase', mn_phys%semisbase, GFS_Data%Sfcprop%semisbase, wt_h=wt_h)
-       !call mover(mi, 'sfalb', mn_phys%sfalb, GFS_Data%Radtend%sfalb, wt_h=wt_h)
 
        call mover(mi, 'u10m', mn_phys%u10m, GFS_Data%IntDiag%u10m, wt_h=wt_h)
        call mover(mi, 'v10m', mn_phys%v10m, GFS_Data%IntDiag%v10m, wt_h=wt_h)
@@ -864,9 +913,230 @@ contains
          call mover(mi, 'tiice', mn_phys%tiice, GFS_Data%Sfcprop%tiice, wt_h=wt_h)
       endif
 
-
-      ! End of new stuff
       ! --------------------------------------------------------------------------------
+      ! It is unknown whether these changes modify hafs results
+
+      ! ------------------------------------------------------------
+      ! Coupling
+       if (GFS_control%do_RRTMGP) then
+          call mover(mi, 'fluxlwUP_radtime', mn_phys%fluxlwUP_radtime, GFS_Data%Coupling%fluxlwUP_radtime, wt_h=wt_h)
+          call mover(mi, 'fluxlwDOWN_radtime', mn_phys%fluxlwDOWN_radtime, GFS_Data%Coupling%fluxlwDOWN_radtime, wt_h=wt_h)
+          call mover(mi, 'fluxlwUP_jac', mn_phys%fluxlwUP_jac, GFS_Data%Coupling%fluxlwUP_jac, wt_h=wt_h)
+          call mover(mi, 'tsfc_radtime', mn_phys%tsfc_radtime, GFS_Data%Coupling%tsfc_radtime, wt_h=wt_h)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%do_sppt .or. GFS_control%cplchm .or. GFS_control%ca_global .or. GFS_control%cpllnd) then
+          call mover(mi, 'rain_cpl', mn_phys%rain_cpl, GFS_Data%Coupling%rain_cpl, wt_h=wt_h)
+          call mover(mi, 'snow_cpl', mn_phys%snow_cpl, GFS_Data%Coupling%snow_cpl, wt_h=wt_h)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cplwav) then
+          !--- instantaneous quantities
+          call mover(mi, 'u10mi_cpl', mn_phys%u10mi_cpl, GFS_Data%Coupling%u10mi_cpl, wt_h=wt_h)
+          call mover(mi, 'v10mi_cpl', mn_phys%v10mi_cpl, GFS_Data%Coupling%v10mi_cpl, wt_h=wt_h)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
+          !--- instantaneous quantities
+          call mover(mi, 'tsfci_cpl', mn_phys%tsfci_cpl, GFS_Data%Coupling%tsfci_cpl, wt_h=wt_h)
+       endif
+
+       if (GFS_control%cplflx .or. GFS_control%cpllnd) then
+          call mover(mi, 'dlwsfci_cpl', mn_phys%dlwsfci_cpl, GFS_Data%Coupling%dlwsfci_cpl, wt_h=wt_h)
+          call mover(mi, 'dswsfci_cpl', mn_phys%dswsfci_cpl, GFS_Data%Coupling%dswsfci_cpl, wt_h=wt_h)
+          call mover(mi, 'dlwsfc_cpl', mn_phys%dlwsfc_cpl, GFS_Data%Coupling%dlwsfc_cpl, wt_h=wt_h)
+          call mover(mi, 'dswsfc_cpl', mn_phys%dswsfc_cpl, GFS_Data%Coupling%dswsfc_cpl, wt_h=wt_h)
+          call mover(mi, 'psurfi_cpl', mn_phys%psurfi_cpl, GFS_Data%Coupling%psurfi_cpl, wt_h=wt_h)
+          call mover(mi, 'nswsfc_cpl', mn_phys%nswsfc_cpl, GFS_Data%Coupling%nswsfc_cpl, wt_h=wt_h)
+          call mover(mi, 'nswsfci_cpl', mn_phys%nswsfci_cpl, GFS_Data%Coupling%nswsfci_cpl, wt_h=wt_h)
+          call mover(mi, 'nnirbmi_cpl', mn_phys%nnirbmi_cpl, GFS_Data%Coupling%nnirbmi_cpl, wt_h=wt_h)
+          call mover(mi, 'nnirdfi_cpl', mn_phys%nnirdfi_cpl, GFS_Data%Coupling%nnirdfi_cpl, wt_h=wt_h)
+          call mover(mi, 'nvisbmi_cpl', mn_phys%nvisbmi_cpl, GFS_Data%Coupling%nvisbmi_cpl, wt_h=wt_h)
+          call mover(mi, 'nvisdfi_cpl', mn_phys%nvisdfi_cpl, GFS_Data%Coupling%nvisdfi_cpl, wt_h=wt_h)
+          call mover(mi, 'nnirbm_cpl', mn_phys%nnirbm_cpl, GFS_Data%Coupling%nnirbm_cpl, wt_h=wt_h)
+          call mover(mi, 'nnirdf_cpl', mn_phys%nnirdf_cpl, GFS_Data%Coupling%nnirdf_cpl, wt_h=wt_h)
+          call mover(mi, 'nvisbm_cpl', mn_phys%nvisbm_cpl, GFS_Data%Coupling%nvisbm_cpl, wt_h=wt_h)
+          call mover(mi, 'nvisdf_cpl', mn_phys%nvisdf_cpl, GFS_Data%Coupling%nvisdf_cpl, wt_h=wt_h)
+       endif
+
+    if (GFS_control%cplflx .or. GFS_control%cpllnd) then
+       call mover(mi, 'dlwsfci_cpl', mn_phys%dlwsfci_cpl, GFS_Data%Coupling%dlwsfci_cpl, wt_h=wt_h)
+       call mover(mi, 'dswsfci_cpl', mn_phys%dswsfci_cpl, GFS_Data%Coupling%dswsfci_cpl, wt_h=wt_h)
+       call mover(mi, 'dlwsfc_cpl', mn_phys%dlwsfc_cpl, GFS_Data%Coupling%dlwsfc_cpl, wt_h=wt_h)
+       call mover(mi, 'dswsfc_cpl', mn_phys%dswsfc_cpl, GFS_Data%Coupling%dswsfc_cpl, wt_h=wt_h)
+       call mover(mi, 'psurfi_cpl', mn_phys%psurfi_cpl, GFS_Data%Coupling%psurfi_cpl, wt_h=wt_h)
+       call mover(mi, 'nswsfc_cpl', mn_phys%nswsfc_cpl, GFS_Data%Coupling%nswsfc_cpl, wt_h=wt_h)
+       call mover(mi, 'nswsfci_cpl', mn_phys%nswsfci_cpl, GFS_Data%Coupling%nswsfci_cpl, wt_h=wt_h)
+       call mover(mi, 'nnirbmi_cpl', mn_phys%nnirbmi_cpl, GFS_Data%Coupling%nnirbmi_cpl, wt_h=wt_h)
+       call mover(mi, 'nnirdfi_cpl', mn_phys%nnirdfi_cpl, GFS_Data%Coupling%nnirdfi_cpl, wt_h=wt_h)
+       call mover(mi, 'nvisbmi_cpl', mn_phys%nvisbmi_cpl, GFS_Data%Coupling%nvisbmi_cpl, wt_h=wt_h)
+       call mover(mi, 'nvisdfi_cpl', mn_phys%nvisdfi_cpl, GFS_Data%Coupling%nvisdfi_cpl, wt_h=wt_h)
+       call mover(mi, 'nnirbm_cpl', mn_phys%nnirbm_cpl, GFS_Data%Coupling%nnirbm_cpl, wt_h=wt_h)
+       call mover(mi, 'nnirdf_cpl', mn_phys%nnirdf_cpl, GFS_Data%Coupling%nnirdf_cpl, wt_h=wt_h)
+       call mover(mi, 'nvisbm_cpl', mn_phys%nvisbm_cpl, GFS_Data%Coupling%nvisbm_cpl, wt_h=wt_h)
+       call mover(mi, 'nvisdf_cpl', mn_phys%nvisdf_cpl, GFS_Data%Coupling%nvisdf_cpl, wt_h=wt_h)
+    end if
+
+    if (GFS_control%cplflx) then
+      !--- incoming quantities
+       call mover(mi, 'slimskin_cpl', mn_phys%slimskin_cpl, GFS_Data%Coupling%slimskin_cpl, wt_h=wt_h)
+       call mover(mi, 'dusfcin_cpl', mn_phys%dusfcin_cpl, GFS_Data%Coupling%dusfcin_cpl, wt_h=wt_h)
+       call mover(mi, 'dvsfcin_cpl', mn_phys%dvsfcin_cpl, GFS_Data%Coupling%dvsfcin_cpl, wt_h=wt_h)
+       call mover(mi, 'dtsfcin_cpl', mn_phys%dtsfcin_cpl, GFS_Data%Coupling%dtsfcin_cpl, wt_h=wt_h)
+       call mover(mi, 'dqsfcin_cpl', mn_phys%dqsfcin_cpl, GFS_Data%Coupling%dqsfcin_cpl, wt_h=wt_h)
+       call mover(mi, 'ulwsfcin_cpl', mn_phys%ulwsfcin_cpl, GFS_Data%Coupling%ulwsfcin_cpl, wt_h=wt_h)
+       call mover(mi, 'hsnoin_cpl', mn_phys%hsnoin_cpl, GFS_Data%Coupling%hsnoin_cpl, wt_h=wt_h)
+
+      ! -- Coupling options to retrive atmosphere-ocean fluxes from mediator
+      if (GFS_control%use_med_flux) then
+         call mover(mi, 'dusfcin_med', mn_phys%dusfcin_med, GFS_Data%Coupling%dusfcin_med, wt_h=wt_h)
+         call mover(mi, 'dvsfcin_med', mn_phys%dvsfcin_med, GFS_Data%Coupling%dvsfcin_med, wt_h=wt_h)
+         call mover(mi, 'dtsfcin_med', mn_phys%dtsfcin_med, GFS_Data%Coupling%dtsfcin_med, wt_h=wt_h)
+         call mover(mi, 'dqsfcin_med', mn_phys%dqsfcin_med, GFS_Data%Coupling%dqsfcin_med, wt_h=wt_h)
+         call mover(mi, 'ulwsfcin_med', mn_phys%ulwsfcin_med, GFS_Data%Coupling%ulwsfcin_med, wt_h=wt_h)
+      end if
+
+      !--- accumulated quantities
+      call mover(mi, 'dusfc_cpl', mn_phys%dusfc_cpl, GFS_Data%Coupling%dusfc_cpl, wt_h=wt_h)
+      call mover(mi, 'dvsfc_cpl', mn_phys%dvsfc_cpl, GFS_Data%Coupling%dvsfc_cpl, wt_h=wt_h)
+      call mover(mi, 'dtsfc_cpl', mn_phys%dtsfc_cpl, GFS_Data%Coupling%dtsfc_cpl, wt_h=wt_h)
+      call mover(mi, 'dqsfc_cpl', mn_phys%dqsfc_cpl, GFS_Data%Coupling%dqsfc_cpl, wt_h=wt_h)
+      call mover(mi, 'dnirbm_cpl', mn_phys%dnirbm_cpl, GFS_Data%Coupling%dnirbm_cpl, wt_h=wt_h)
+      call mover(mi, 'dnirdf_cpl', mn_phys%dnirdf_cpl, GFS_Data%Coupling%dnirdf_cpl, wt_h=wt_h)
+      call mover(mi, 'dvisbm_cpl', mn_phys%dvisbm_cpl, GFS_Data%Coupling%dvisbm_cpl, wt_h=wt_h)
+      call mover(mi, 'dvisdf_cpl', mn_phys%dvisdf_cpl, GFS_Data%Coupling%dvisdf_cpl, wt_h=wt_h)
+      call mover(mi, 'nlwsfc_cpl', mn_phys%nlwsfc_cpl, GFS_Data%Coupling%nlwsfc_cpl, wt_h=wt_h)
+
+      !--- instantaneous quantities
+      call mover(mi, 'dusfci_cpl', mn_phys%dusfci_cpl, GFS_Data%Coupling%dusfci_cpl, wt_h=wt_h)
+      call mover(mi, 'dvsfci_cpl', mn_phys%dvsfci_cpl, GFS_Data%Coupling%dvsfci_cpl, wt_h=wt_h)
+      call mover(mi, 'dtsfci_cpl', mn_phys%dtsfci_cpl, GFS_Data%Coupling%dtsfci_cpl, wt_h=wt_h)
+      call mover(mi, 'dqsfci_cpl', mn_phys%dqsfci_cpl, GFS_Data%Coupling%dqsfci_cpl, wt_h=wt_h)
+      call mover(mi, 'dnirbmi_cpl', mn_phys%dnirbmi_cpl, GFS_Data%Coupling%dnirbmi_cpl, wt_h=wt_h)
+      call mover(mi, 'dnirdfi_cpl', mn_phys%dnirdfi_cpl, GFS_Data%Coupling%dnirdfi_cpl, wt_h=wt_h)
+      call mover(mi, 'dvisbmi_cpl', mn_phys%dvisbmi_cpl, GFS_Data%Coupling%dvisbmi_cpl, wt_h=wt_h)
+      call mover(mi, 'dvisdfi_cpl', mn_phys%dvisdfi_cpl, GFS_Data%Coupling%dvisdfi_cpl, wt_h=wt_h)
+      call mover(mi, 'nlwsfci_cpl', mn_phys%nlwsfci_cpl, GFS_Data%Coupling%nlwsfci_cpl, wt_h=wt_h)
+      call mover(mi, 't2mi_cpl', mn_phys%t2mi_cpl, GFS_Data%Coupling%t2mi_cpl, wt_h=wt_h)
+      call mover(mi, 'q2mi_cpl', mn_phys%q2mi_cpl, GFS_Data%Coupling%q2mi_cpl, wt_h=wt_h)
+      call mover(mi, 'oro_cpl', mn_phys%oro_cpl, GFS_Data%Coupling%oro_cpl, wt_h=wt_h)
+      call mover(mi, 'slmsk_cpl', mn_phys%slmsk_cpl, GFS_Data%Coupling%slmsk_cpl, wt_h=wt_h)
+   endif
+
+    ! -- Coupling options to retrive land fluxes from external land component 
+    if (GFS_control%cpllnd .and. GFS_control%cpllnd2atm) then
+       call mover(mi, 'sncovr1_lnd', mn_phys%sncovr1_lnd, GFS_Data%Coupling%sncovr1_lnd, wt_h=wt_h)
+       call mover(mi, 'qsurf_lnd', mn_phys%qsurf_lnd, GFS_Data%Coupling%qsurf_lnd, wt_h=wt_h)
+       call mover(mi, 'evap_lnd', mn_phys%evap_lnd, GFS_Data%Coupling%evap_lnd, wt_h=wt_h)
+       call mover(mi, 'hflx_lnd', mn_phys%hflx_lnd, GFS_Data%Coupling%hflx_lnd, wt_h=wt_h)
+       call mover(mi, 'ep_lnd', mn_phys%ep_lnd, GFS_Data%Coupling%ep_lnd, wt_h=wt_h)
+       call mover(mi, 't2mmp_lnd', mn_phys%t2mmp_lnd, GFS_Data%Coupling%t2mmp_lnd, wt_h=wt_h)
+       call mover(mi, 'q2mp_lnd', mn_phys%q2mp_lnd, GFS_Data%Coupling%q2mp_lnd, wt_h=wt_h)
+       call mover(mi, 'gflux_lnd', mn_phys%gflux_lnd, GFS_Data%Coupling%gflux_lnd, wt_h=wt_h)
+       call mover(mi, 'runoff_lnd', mn_phys%runoff_lnd, GFS_Data%Coupling%runoff_lnd, wt_h=wt_h)
+       call mover(mi, 'drain_lnd', mn_phys%drain_lnd, GFS_Data%Coupling%drain_lnd, wt_h=wt_h)
+       call mover(mi, 'cmm_lnd', mn_phys%cmm_lnd, GFS_Data%Coupling%cmm_lnd, wt_h=wt_h)
+       call mover(mi, 'chh_lnd', mn_phys%chh_lnd, GFS_Data%Coupling%chh_lnd, wt_h=wt_h)
+       call mover(mi, 'zvfun_lnd', mn_phys%zvfun_lnd, GFS_Data%Coupling%zvfun_lnd, wt_h=wt_h)
+   endif
+
+
+      ! ------------------------------------------------------------
+      ! Radtend
+
+      call mover(mi, 'lwhd', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
+
+      ! ------------------------------------------------------------
+      ! Sfcprop
+      call mover(mi, 'weasdl', mn_phys%weasd, GFS_Data%Sfcprop%weasdl, wt_h)
+      call mover(mi, 'snodl', mn_phys%weasd, GFS_Data%Sfcprop%snodl, wt_h)
+      call mover(mi, 'th2m', mn_phys%t2m, GFS_Data%Sfcprop%th2m, wt_h=wt_h)
+      call mover(mi, 'semisbase', mn_phys%semisbase, GFS_Data%Sfcprop%semisbase, wt_h=wt_h)
+
+       if (GFS_control%lsm == GFS_control%lsm_ruc) then
+          ! For land surface models with different numbers of levels than the four NOAH levels
+          call mover(mi, 'keepsmfr', mn_phys%keepsmfr, GFS_data%Sfcprop%keepsmfr, wt_h=wt_h)
+          call mover(mi, 'flag_frsoil', mn_phys%flag_frsoil, GFS_data%Sfcprop%flag_frsoil, wt_h=wt_h)
+          call mover(mi, 'rhofr', mn_phys%rhofr, GFS_data%Sfcprop%rhofr, wt_h=wt_h)
+          call mover(mi, 'acsnow_land', mn_phys%acsnow_land, GFS_data%Sfcprop%acsnow_land, wt_h=wt_h)
+          call mover(mi, 'acsnow_ice', mn_phys%acsnow_ice, GFS_data%Sfcprop%acsnow_ice, wt_h=wt_h)
+          call mover(mi, 'fire_heat_flux', mn_phys%fire_heat_flux, GFS_data%Sfcprop%fire_heat_flux, wt_h=wt_h)
+          call mover(mi, 'frac_grid_burned', mn_phys%frac_grid_burned, GFS_data%Sfcprop%frac_grid_burned, wt_h=wt_h)
+       endif
+
+      ! ------------------------------------------------------------
+      ! Tbd
+
+       call mover(mi, 'rann', mn_phys%rann, GFS_data%Tbd%rann, wt_h=wt_h)
+
+       call mover(mi, 'acv', mn_phys%acv, GFS_data%Tbd%acv, wt_h=wt_h)
+       call mover(mi, 'acvb', mn_phys%acvb, GFS_data%Tbd%acvb, wt_h=wt_h)
+       call mover(mi, 'acvt', mn_phys%acvt, GFS_data%Tbd%acvt, wt_h=wt_h)
+
+       if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
+          call mover(mi, 'drain_cpl', mn_phys%drain_cpl, GFS_data%Tbd%drain_cpl, wt_h=wt_h)
+          call mover(mi, 'dsnow_cpl', mn_phys%dsnow_cpl, GFS_data%Tbd%dsnow_cpl, wt_h=wt_h)
+       endif
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call mover(mi, 'forcet', mn_phys%forcet, GFS_Data%Tbd%forcet, wt_h=wt_h)
+          call mover(mi, 'forceq', mn_phys%forceq, GFS_Data%Tbd%forceq, wt_h=wt_h)
+       end if
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call mover(mi, 'cactiv', mn_phys%cactiv, GFS_Data%Tbd%cactiv, wt_h=wt_h)
+          call mover(mi, 'cactiv_m', mn_phys%cactiv_m, GFS_Data%Tbd%cactiv_m, wt_h=wt_h)
+       endif
+
+       ! MYJ variables
+       if (GFS_control%do_myjsfc.or.GFS_control%do_myjpbl) then
+          !print*,"Allocating all MYJ surface variables:"
+          call mover(mi, 'phy_myj_qsfc', mn_phys%phy_myj_qsfc, GFS_data%Tbd%phy_myj_qsfc, wt_h=wt_h)
+          call mover(mi, 'phy_myj_thz0', mn_phys%phy_myj_thz0, GFS_data%Tbd%phy_myj_thz0, wt_h=wt_h)
+          call mover(mi, 'phy_myj_qz0', mn_phys%phy_myj_qz0, GFS_data%Tbd%phy_myj_qz0, wt_h=wt_h)
+          call mover(mi, 'phy_myj_uz0', mn_phys%phy_myj_uz0, GFS_data%Tbd%phy_myj_uz0, wt_h=wt_h)
+          call mover(mi, 'phy_myj_vz0', mn_phys%phy_myj_vz0, GFS_data%Tbd%phy_myj_vz0, wt_h=wt_h)
+          call mover(mi, 'phy_myj_akhs', mn_phys%phy_myj_akhs, GFS_data%Tbd%phy_myj_akhs, wt_h=wt_h)
+          call mover(mi, 'phy_myj_akms', mn_phys%phy_myj_akms, GFS_data%Tbd%phy_myj_akms, wt_h=wt_h)
+          call mover(mi, 'phy_myj_chkqlm', mn_phys%phy_myj_chkqlm, GFS_data%Tbd%phy_myj_chkqlm, wt_h=wt_h)
+          call mover(mi, 'phy_myj_elflx', mn_phys%phy_myj_elflx, GFS_data%Tbd%phy_myj_elflx, wt_h=wt_h)
+          call mover(mi, 'phy_myj_a1u', mn_phys%phy_myj_a1u, GFS_data%Tbd%phy_myj_a1u, wt_h=wt_h)
+          call mover(mi, 'phy_myj_a1t', mn_phys%phy_myj_a1t, GFS_data%Tbd%phy_myj_a1t, wt_h=wt_h)
+          call mover(mi, 'phy_myj_a1q', mn_phys%phy_myj_a1q, GFS_data%Tbd%phy_myj_a1q, wt_h=wt_h)
+       endif
+
+       ! ------------------------------------------------------------
+       ! Diag
+
+       if (GFS_control%do_mynnedmf) then
+          if (GFS_control%bl_mynn_output .ne. 0) then
+             call mover(mi, 'edmf_a', mn_phys%edmf_a, GFS_data%IntDiag%edmf_a, wt_h=wt_h)
+             call mover(mi, 'edmf_w', mn_phys%edmf_w, GFS_data%IntDiag%edmf_w, wt_h=wt_h)
+             call mover(mi, 'edmf_qt', mn_phys%edmf_qt, GFS_data%IntDiag%edmf_qt, wt_h=wt_h)
+             call mover(mi, 'edmf_thl', mn_phys%edmf_thl, GFS_data%IntDiag%edmf_thl, wt_h=wt_h)
+             call mover(mi, 'edmf_ent', mn_phys%edmf_ent, GFS_data%IntDiag%edmf_ent, wt_h=wt_h)
+             call mover(mi, 'edmf_qc', mn_phys%edmf_qc, GFS_data%IntDiag%edmf_qc, wt_h=wt_h)
+             call mover(mi, 'sub_thl', mn_phys%sub_thl, GFS_data%IntDiag%sub_thl, wt_h=wt_h)
+             call mover(mi, 'sub_sqv', mn_phys%sub_sqv, GFS_data%IntDiag%sub_sqv, wt_h=wt_h)
+             call mover(mi, 'det_thl', mn_phys%det_thl, GFS_data%IntDiag%det_thl, wt_h=wt_h)
+             call mover(mi, 'det_sqv', mn_phys%det_sqv, GFS_data%IntDiag%det_sqv, wt_h=wt_h)
+          endif
+          if (GFS_control%tke_budget .gt. 0) then
+             call mover(mi, 'dqke', mn_phys%dqke, GFS_data%IntDiag%dqke, wt_h=wt_h)
+             call mover(mi, 'qwt', mn_phys%qwt, GFS_data%IntDiag%qwt, wt_h=wt_h)
+             call mover(mi, 'qshear', mn_phys%qshear, GFS_data%IntDiag%qshear, wt_h=wt_h)
+             call mover(mi, 'qbuoy', mn_phys%qbuoy, GFS_data%IntDiag%qbuoy, wt_h=wt_h)
+             call mover(mi, 'qdiss', mn_phys%qdiss, GFS_data%IntDiag%qdiss, wt_h=wt_h)
+          endif
+          call mover(mi, 'maxwidth', mn_phys%maxwidth, GFS_data%IntDiag%maxwidth, wt_h=wt_h)
+          call mover(mi, 'maxmf', mn_phys%maxmf, GFS_data%IntDiag%maxmf, wt_h=wt_h)
+          call mover(mi, 'ztop_plume', mn_phys%ztop_plume, GFS_data%IntDiag%ztop_plume, wt_h=wt_h)
+          call mover(mi, 'ktop_plume', mn_phys%ktop_plume, GFS_data%IntDiag%ktop_plume, wt_h=wt_h)
+          call mover(mi, 'exch_h', mn_phys%exch_h, GFS_data%IntDiag%exch_h, wt_h=wt_h)
+          call mover(mi, 'exch_m', mn_phys%exch_m, GFS_data%IntDiag%exch_m, wt_h=wt_h)
+       end if
+
+       ! --------------------------------------------------------------------------------
 
        check_stype_vtype: if(mi%action == DO_COPY_TO_BLOCK_ARRAYS) then
           ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
@@ -893,7 +1163,7 @@ contains
        endif check_stype_vtype
     endif if_move_physics
 
-    if_move_nsst: if (move_nsst) then
+    if_move_nsst: if (GFS_control%nstf_name(1) > 0) then
        call mover(mi, 'tref', mn_phys%tref, GFS_Data%Sfcprop%tref, wt_h)
        call mover(mi, 'z_c', mn_phys%z_c, GFS_Data%Sfcprop%z_c, wt_h)
        call mover(mi, 'c_0', mn_phys%c_0, GFS_Data%Sfcprop%c_0, wt_h)
@@ -1014,6 +1284,29 @@ contains
        call block_copy(mi, var, block_array, if_missing, if_missing_on_sea, if_missing_on_land, if_negative)
     endif
   end subroutine mover_int_2d
+
+  subroutine mover_int_3d(mi, name, var, block_array, wt_h)
+    implicit none
+    type(movement_info), intent(in) :: mi
+    character(len=*), intent(in) :: name
+    integer, allocatable, intent(inout) :: var(:,:,:)
+    integer, intent(inout) :: block_array(:,:)
+    real, allocatable, intent(in), optional :: wt_h(:,:,:)
+
+    if(mi%action == DO_FILL_NEST_HALOS_FROM_PARENT) then
+       call fill_nest_halos_from_parent(name, var, interp_A_grid, mi%ChildGrid%neststruct%wt_h, & ! mover_r8_3d
+            mi%ChildGrid%neststruct%ind_h, &
+            mi%ChildGrid%neststruct%refinement, mi%ChildGrid%neststruct%refinement, &
+            mi%is_fine_pe, mi%nest_domain, CENTER, size(var,3))
+    else if(mi%action == DO_FILL_INTERN_NEST_HALOS) then
+       call mn_var_fill_intern_nest_halos(var, mi%domain_fine, mi%is_fine_pe)
+    else if(mi%action == DO_SHIFT_DATA) then
+       call mn_var_shift_data(var, 1, wt_h, mi%ChildGrid%neststruct%ind_h, & ! mover_phys_3d
+            mi%delta_i_c, mi%delta_j_c, mi%x_refine, mi%y_refine, mi%is_fine_pe, mi%nest_domain, CENTER, size(var,3))
+    else
+       call block_copy(mi, var, block_array)
+    endif
+  end subroutine mover_int_3d
 
   subroutine mover_phys_3d(mi, name, var, block_array, wt_h)
     implicit none
