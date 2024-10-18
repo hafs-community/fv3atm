@@ -659,14 +659,22 @@ module fv_moving_nest_types_mod
     real (kind=kind_phys), allocatable :: do3_dt_temp(:,:,:)
     real (kind=kind_phys), allocatable :: do3_dt_ohoz(:,:,:)
 
-! BEGINNING OF CONFLICTS------------------------------------------------------------------------------------
-! This section was from an older attempt to get rrfs physics working. It is untested in the latest version.
-! Code that uses these variables is inside "if(.false.)" blocks to disable it.
-! These lines are here to avoid errors during compilation of the disabled code.
     real (kind=kind_phys), allocatable :: fluxlwUP_radtime(:,:,:)  !< RRTMGP upward   longwave  all-sky flux profile
     real (kind=kind_phys), allocatable :: fluxlwDOWN_radtime(:,:,:)  !< RRTMGP downward  longwave  all-sky flux profile
     real (kind=kind_phys), allocatable :: fluxlwUP_jac(:,:,:)  !< RRTMGP Jacobian of upward longwave all-sky flux
     real (kind=kind_phys), allocatable :: tsfc_radtime(:,:)  !< RRTMGP surface temperature on radiation timestep
+
+    real (kind=kind_phys), allocatable :: forcet (:,:,:)  !<
+    real (kind=kind_phys), allocatable :: forceq (:,:,:)  !<
+    integer,               allocatable :: cactiv   (:,:)  !< convective activity memory contour
+    integer,               allocatable :: cactiv_m (:,:)  !< mid-level convective activity memory contour
+
+! BEGINNING OF CONFLICTS------------------------------------------------------------------------------------
+! This section was from an older attempt to get rrfs physics working. It is untested in the latest version.
+! Code that uses these variables is inside "if(.false.)" blocks to disable it.
+! These lines are here to avoid errors during compilation of the disabled code.
+
+    ! Coupling variables
     real (kind=kind_phys), allocatable :: rain_cpl  (:,:)   !< total rain precipitation
     real (kind=kind_phys), allocatable :: snow_cpl  (:,:)   !< total snow precipitation
     real (kind=kind_phys), allocatable :: u10mi_cpl  (:,:)   !< instantaneous U10m
@@ -721,20 +729,20 @@ module fv_moving_nest_types_mod
     real (kind=kind_phys), allocatable :: q2mi_cpl   (:,:)   !< instantaneous Q2m
     real (kind=kind_phys), allocatable :: oro_cpl    (:,:)   !< orography          (  oro from GFS_sfcprop_type)
     real (kind=kind_phys), allocatable :: slmsk_cpl  (:,:)   !< Land/Sea/Ice mask  (slmsk from GFS_sfcprop_type)
+
+    ! A comment in GFS_typedefs.F90 says this variable isn't used:
     ! real (kind=kind_phys), allocatable :: lwhd (:,:,:,:)  !< idea sky lw heating rates ( k/s ) !DJS2023 THIS IS NOT USED. IT IS REFERENCED, BUT NEVER SET?
     real (kind=kind_phys), allocatable :: rann     (:,:,:)  !< random number array (0-1)
+
     real (kind=kind_phys), allocatable :: acv      (:,:)  !< array containing accumulated convective clouds
     real (kind=kind_phys), allocatable :: acvb     (:,:)  !< arrays used by cnvc90 bottom
     real (kind=kind_phys), allocatable :: acvt     (:,:)  !< arrays used by cnvc90 top (cnvc90.f)
+
     !--- Stochastic physics properties calculated in physics_driver
     real (kind=kind_phys), allocatable :: drain_cpl (:,:)  !< change in rain_cpl (coupling_type)
     real (kind=kind_phys), allocatable :: dsnow_cpl (:,:)  !< change in show_cpl (coupling_type)
-    !--- dynamical forcing variables for Grell-Freitas convection
-    real (kind=kind_phys), allocatable :: forcet (:,:,:)  !<
-    real (kind=kind_phys), allocatable :: forceq (:,:,:)  !<
-    integer,               allocatable :: cactiv   (:,:)  !< convective activity memory contour
-    integer,               allocatable :: cactiv_m (:,:)  !< mid-level convective activity memory contour
-    real (kind=kind_phys), allocatable :: aod_gf   (:,:)
+
+    ! MYJ scheme variables
     real (kind=kind_phys), allocatable :: phy_myj_qsfc(:,:)  !
     real (kind=kind_phys), allocatable :: phy_myj_thz0(:,:)  !
     real (kind=kind_phys), allocatable :: phy_myj_qz0(:,:)  !

@@ -1261,13 +1261,6 @@ contains
        call mover(mi, 'aux3d', mn_phys%aux3d, GFS_Data%Intdiag%aux3d, wt_h=wt_h)
     endif
 
-
-         
-      if(omit_hafs_bugs) then
-         !--------------------------------------------------------------------------------
-         ! Everything in this section DOES change the HAFS results.
-         ! They should be enabled anyway, since they're needed by the physics.
-         !--------------------------------------------------------------------------------
          call mover(mi, 'sncovr', mn_phys%sncovr, GFS_Data%Sfcprop%sncovr, wt_h, &
                halo_land_mask_fill=0.0_kind_phys, if_negative=0.0_kind_phys)
          call mover(mi, 'weasd', mn_phys%weasd, GFS_Data%Sfcprop%weasd, wt_h, &
@@ -1294,15 +1287,23 @@ contains
          call mover(mi, 'htrlw', mn_phys%htrlw, GFS_Data%Radtend%htrlw, wt_h=wt_h)
 
          call mover(mi, 'tiice', mn_phys%tiice, GFS_Data%Sfcprop%tiice, wt_h=wt_h)
-      endif
 
-
-      ! Coupling
+       ! Coupling
        if (GFS_control%do_RRTMGP) then
           call mover(mi, 'fluxlwUP_radtime', mn_phys%fluxlwUP_radtime, GFS_Data%Coupling%fluxlwUP_radtime, wt_h=wt_h)
           call mover(mi, 'fluxlwDOWN_radtime', mn_phys%fluxlwDOWN_radtime, GFS_Data%Coupling%fluxlwDOWN_radtime, wt_h=wt_h)
           call mover(mi, 'fluxlwUP_jac', mn_phys%fluxlwUP_jac, GFS_Data%Coupling%fluxlwUP_jac, wt_h=wt_h)
           call mover(mi, 'tsfc_radtime', mn_phys%tsfc_radtime, GFS_Data%Coupling%tsfc_radtime, wt_h=wt_h)
+       endif
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call mover(mi, 'forcet', mn_phys%forcet, GFS_Data%Tbd%forcet, wt_h=wt_h)
+          call mover(mi, 'forceq', mn_phys%forceq, GFS_Data%Tbd%forceq, wt_h=wt_h)
+       end if
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call mover(mi, 'cactiv', mn_phys%cactiv, GFS_Data%Tbd%cactiv, wt_h=wt_h)
+          call mover(mi, 'cactiv_m', mn_phys%cactiv_m, GFS_Data%Tbd%cactiv_m, wt_h=wt_h)
        endif
 
 ! BEGINNING OF CONFLICTS------------------------------------------------------------------------------------
@@ -1388,7 +1389,8 @@ contains
       ! ------------------------------------------------------------
       ! Radtend
 
-      call mover(mi, 'lwhd', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
+      ! A comment in GFS_typedefs.F90 says this variable isn't used:
+      ! call mover(mi, 'lwhd', mn_phys%lwhc, GFS_Data%Radtend%lwhc, wt_h=wt_h)
 
       ! ------------------------------------------------------------
       ! Tbd
@@ -1402,16 +1404,6 @@ contains
        if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
           call mover(mi, 'drain_cpl', mn_phys%drain_cpl, GFS_data%Tbd%drain_cpl, wt_h=wt_h)
           call mover(mi, 'dsnow_cpl', mn_phys%dsnow_cpl, GFS_data%Tbd%dsnow_cpl, wt_h=wt_h)
-       endif
-
-       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
-          call mover(mi, 'forcet', mn_phys%forcet, GFS_Data%Tbd%forcet, wt_h=wt_h)
-          call mover(mi, 'forceq', mn_phys%forceq, GFS_Data%Tbd%forceq, wt_h=wt_h)
-       end if
-
-       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
-          call mover(mi, 'cactiv', mn_phys%cactiv, GFS_Data%Tbd%cactiv, wt_h=wt_h)
-          call mover(mi, 'cactiv_m', mn_phys%cactiv_m, GFS_Data%Tbd%cactiv_m, wt_h=wt_h)
        endif
 
        ! MYJ variables
