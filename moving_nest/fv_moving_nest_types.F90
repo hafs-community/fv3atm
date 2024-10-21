@@ -1207,13 +1207,6 @@ contains
        call alloc_dealloc(mn_phys%swhc, GFS_Control%levs)
        call alloc_dealloc(mn_phys%lwhc, GFS_Control%levs)
 
-! BEGINNING OF CONFLICTS------------------------------------------------------------------------------------
-! This section was from an older attempt to get rrfs physics working. It is untested in the latest version.
-       UNTESTED_IN_LATEST_VERSION: IF(.FALSE.) THEN
-       
-       ! ------------------------------------------------------------
-       ! Coupling
-       
        if (GFS_control%do_RRTMGP) then
           call alloc_dealloc(mn_phys%fluxlwUP_radtime, GFS_control%levs+1)
           call alloc_dealloc(mn_phys%fluxlwDOWN_radtime, GFS_control%levs+1)
@@ -1221,6 +1214,23 @@ contains
           call alloc_dealloc(mn_phys%tsfc_radtime)
        endif
 
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call alloc_dealloc(mn_phys%forcet, GFS_control%levs)
+          call alloc_dealloc(mn_phys%forceq, GFS_control%levs)
+       end if
+
+       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
+          call alloc_dealloc(mn_phys%cactiv)
+          call alloc_dealloc(mn_phys%cactiv_m)
+       endif
+
+! BEGINNING OF CONFLICTS------------------------------------------------------------------------------------
+! This section was from an older attempt to get rrfs physics working. It is untested in the latest version.
+       UNTESTED_IN_LATEST_VERSION: IF(.FALSE.) THEN
+       
+       ! ------------------------------------------------------------
+       ! Coupling
+       
        if (GFS_control%cplflx .or. GFS_control%do_sppt .or. GFS_control%cplchm .or. GFS_control%ca_global .or. GFS_control%cpllnd) then
           call alloc_dealloc(mn_phys%rain_cpl)
           call alloc_dealloc(mn_phys%snow_cpl)
@@ -1334,16 +1344,6 @@ contains
        if (GFS_control%cplflx .or. GFS_control%cplchm .or. GFS_control%cpllnd) then
           call alloc_dealloc(mn_phys%drain_cpl)
           call alloc_dealloc(mn_phys%dsnow_cpl)
-       endif
-
-       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or. GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_ntiedtke .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
-          call alloc_dealloc(mn_phys%forcet, GFS_control%levs)
-          call alloc_dealloc(mn_phys%forceq, GFS_control%levs)
-       end if
-
-       if (GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_gf .or.  GFS_control%imfdeepcnv == GFS_control%imfdeepcnv_c3) then
-          call alloc_dealloc(mn_phys%cactiv)
-          call alloc_dealloc(mn_phys%cactiv_m)
        endif
 
        if (GFS_control%do_myjsfc.or.GFS_control%do_myjpbl) then
