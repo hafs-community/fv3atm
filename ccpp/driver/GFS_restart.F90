@@ -63,8 +63,8 @@ module GFS_restart
     integer :: ndiag_idx(20), itime
     integer :: nblks, num, nb, max_rstrt, offset 
     character(len=2) :: c2 = ''
-    logical :: surface_layer_saves_rainprev
-    
+    logical :: surface_layer_saves_rainprev 
+   
     nblks = size(Init_parm%blksz)
     max_rstrt = size(Restart%name2d)
 
