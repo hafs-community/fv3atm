@@ -135,7 +135,10 @@ contains
     ! For iterating through physics/surface vector data
     integer                 :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx
     real(kind=kind_phys)    :: phys_oro
+    integer :: this_pe
 
+    this_pe = mpp_pe()
+    
     ! Setup local land sea mask grid for masked interpolations
     do i_pe = Atm(n)%bd%isd, Atm(n)%bd%ied
       do j_pe = Atm(n)%bd%jsd, Atm(n)%bd%jed
@@ -172,6 +175,16 @@ contains
           IPD_data(nb)%Sfcprop%landfrac(ix) = 0    ! Ocean -- TODO permit fractions
         endif
 
+
+        ! TODO remove validation of array bounds
+        if (i_idx .lt. lbound(mn_static%deep_soil_temp_grid,1) .or. i_idx .gt. ubound(mn_static%deep_soil_temp_grid,1) .or. &
+            j_idx .lt. lbound(mn_static%deep_soil_temp_grid,2) .or. j_idx .gt. ubound(mn_static%deep_soil_temp_grid,2))  then
+          
+          print '("[ERROR] WDR mn_phys_reset_sfc_props npe=",I0," FX read (",I0,",",I0,") from deep_soil_temp_grid(",I0,"-",I0,",",I0,"-",I0,") ioffset=",I0," joffset=",I0)', this_pe, i_idx, j_idx, lbound(mn_static%deep_soil_temp_grid,1), ubound(mn_static%deep_soil_temp_grid,1), lbound(mn_static%deep_soil_temp_grid,2), ubound(mn_static%deep_soil_temp_grid,2), ioffset, joffset
+        endif
+
+
+        
         IPD_data(nb)%Sfcprop%tg3(ix) = mn_static%deep_soil_temp_grid(i_idx, j_idx)
 
         ! Follow logic from FV3/io/FV3GFS_io.F90 line 1187
