@@ -94,7 +94,7 @@ module fv_moving_nest_mod
   use fv_moving_nest_utils_mod,  only: fill_nest_from_buffer, fill_nest_from_buffer_cell_center, fill_nest_from_buffer_nearest_neighbor
   use fv_moving_nest_utils_mod,  only: fill_nest_halos_from_parent, fill_grid_from_supergrid, fill_weight_grid
   use fv_moving_nest_utils_mod,  only: alloc_read_data
-
+  use fv_moving_nest_tiled_read_mod,  only: mn_static_filename
   implicit none
 
 #ifdef NO_QUAD_PRECISION
@@ -786,42 +786,6 @@ contains
     if (use_timers) call mpp_clock_end (id_load5)
 
   end subroutine mn_latlon_load_parent
-
-  !>@brief The subroutine 'mn_static_filename' generates the full pathname for a static file for each run
-  !>@details Constructs the full pathname for a variable and refinement level and tests whether it exists
-  subroutine mn_static_filename(surface_dir, tile_num, tag, refine, grid_filename)
-    character(len=*), intent(in)       :: surface_dir     !< Directory
-    character(len=*), intent(in)       :: tag             !< Variable name
-    integer, intent(in)                :: tile_num        !< Tile number
-    integer, intent(in)                :: refine          !< Nest refinement
-    character(len=*), intent(out)      :: grid_filename   !< Output pathname to netCDF file
-
-    character(len=256) :: refine_str, parent_str
-    character(len=1)   :: divider
-    logical            :: file_exists
-
-    write(parent_str, '(I0)'), tile_num
-
-    if (refine .eq. 1 .and. (tag .eq. 'grid' .or. tag .eq. 'oro_data')) then
-      ! For 1x files in INPUT directory; go at the symbolic link
-      grid_filename = trim(trim(surface_dir) // '/' // trim(tag) // '.tile' // trim(parent_str) // '.nc')
-    else
-      if (refine .eq. 1) then
-        grid_filename = trim(trim(surface_dir) // '/' // trim(tag) // '.tile' // trim(parent_str) // '.nc')
-      else
-        write(refine_str, '(I0,A1)'), refine, 'x'
-        grid_filename = trim(trim(surface_dir) // '/' // trim(tag) // '.tile' // trim(parent_str) // '.' // trim(refine_str) // '.nc')
-      endif
-    endif
-
-    grid_filename = trim(grid_filename)
-
-    inquire(FILE=grid_filename, EXIST=file_exists)
-    if (.not. file_exists) then
-      call mpp_error(FATAL, 'mn_static_filename DOES NOT EXIST '//trim(grid_filename))
-    endif
-
-  end subroutine mn_static_filename
 
   !>@brief The subroutine 'mn_latlon_read_hires_parent' reads in static data from a netCDF file
   subroutine mn_latlon_read_hires_parent(npx, npy, refine, pelist, fp_super_tile_geo, surface_dir, parent_tile)
@@ -1914,8 +1878,8 @@ contains
       !! Reallocate buffers that are declared in fv_nesting.F90
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      !call dealloc_nested_buffers(Atm(parent_grid_num))
-      call dealloc_nested_buffers()
+      call dealloc_nested_buffers(Atm(parent_grid_num))
+      !call dealloc_nested_buffers()
 
       ! Set both to true so the call to setup_nested_grid_BCs() (at the beginning of fv_dynamics()) will reset t0 buffers
       ! They will be returned to false by setup_nested_grid_BCs()

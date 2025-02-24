@@ -89,6 +89,7 @@ if(MOVING_NEST)
     moving_nest/fv_moving_nest_main.F90
     moving_nest/fv_moving_nest_physics.F90
     moving_nest/fv_moving_nest_types.F90
+    moving_nest/fv_moving_nest_tiled_read.F90
     moving_nest/fv_moving_nest_utils.F90
   )
 else()
