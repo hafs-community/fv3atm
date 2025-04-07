@@ -48,6 +48,7 @@ module fv_moving_nest_types_mod
     character(len=120)    :: surface_dir = "INPUT/moving_nest"
     integer               :: terrain_smoother = 4
     integer               :: vortex_tracker = 0
+    real                  :: static_grid_ratio = 0.50   ! Ratio of 0 reads in small static grids (memory efficient), ratio of 1 reads full parent (cpu efficient)
     integer               :: ntrack = 1
     integer               :: corral_x = 5
     integer               :: corral_y = 5
@@ -80,6 +81,11 @@ module fv_moving_nest_types_mod
   !  Note these are only 32 bits for now; matching the precision of the input netCDF files
   !  though the model generally handles physics variables with 64 bit precision
   type mn_surface_grids
+    integer :: fp_nx, fp_ny
+    integer :: tile_nx, tile_ny
+    integer :: tile_ioffset, tile_joffset
+    integer :: num_reads
+
     real, allocatable  :: orog_grid(:,:)               _NULL  ! orography -- raw or filtered depending on namelist option, in meters
     real, allocatable  :: orog_std_grid(:,:)           _NULL  ! terrain standard deviation for gravity wave drag, in meters (?)
     real, allocatable  :: ls_mask_grid(:,:)            _NULL  ! land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
@@ -87,6 +93,9 @@ module fv_moving_nest_types_mod
 
     real, allocatable  :: parent_orog_grid(:,:)        _NULL  ! parent orography -- only used for terrain_smoother=1.
     !     raw or filtered depending on namelist option,in meters
+
+    real, allocatable  :: deep_lat(:,:)                _NULL  ! deep soil temperature file geolat for debugging TODO remove TILEDEBUG
+    real, allocatable  :: deep_lon(:,:)                _NULL  ! deep soil temperature file geolon for debugging TODO remove TILEDEBUG
 
     ! Soil variables
     real, allocatable  :: deep_soil_temp_grid(:,:)     _NULL  ! deep soil temperature at 5m, in degrees K
@@ -219,12 +228,20 @@ module fv_moving_nest_types_mod
 
     type(grid_geometry)               :: parent_geo
     type(grid_geometry)               :: fp_super_tile_geo
+
+    logical                           :: first_nest_move  ! Is this the first time this nest moves?
+
+    ! These are updated every timestep when nest motion is evaluated
+    logical                           :: do_move
+    integer                           :: delta_i_c, delta_j_c
+
   end type fv_moving_nest_type
 
   ! Moving Nest Namelist Variables
   logical, dimension(MAX_NNEST) :: is_moving_nest = .False.
   character(len=120)            :: surface_dir = "INPUT/moving_nest"
   integer, dimension(MAX_NNEST) :: terrain_smoother = 4  ! 0 -- all high-resolution data, 1 - static nest smoothing algorithm with blending zone of 5 points, 2 - blending zone of 10 points, 5 - 5 point smoother, 9 - 9 point smoother
+  real, dimension(MAX_NNEST)    :: static_grid_ratio = 0.50 !  
   integer, dimension(MAX_NNEST) :: vortex_tracker = 0 ! 0 - not a moving nest, tracker not needed
   ! 1 - prescribed nest moving
   ! 2 - following child domain center
@@ -269,9 +286,11 @@ contains
 
     do n=1,ngrids
       if (Atm(n)%neststruct%nested) then
+        Moving_nest(n)%first_nest_move                = .True.    ! TODO only set this true if is_moving_nest
         Moving_nest(n)%mn_flag%is_moving_nest         = is_moving_nest(n)
         Moving_nest(n)%mn_flag%surface_dir            = trim(surface_dir)
         Moving_nest(n)%mn_flag%terrain_smoother       = terrain_smoother(n)
+        Moving_nest(n)%mn_flag%static_grid_ratio      = static_grid_ratio(n)
         Moving_nest(n)%mn_flag%vortex_tracker         = vortex_tracker(n)
         Moving_nest(n)%mn_flag%ntrack                 = ntrack(n)
         Moving_nest(n)%mn_flag%move_cd_x              = move_cd_x(n)
@@ -280,7 +299,9 @@ contains
         Moving_nest(n)%mn_flag%corral_y               = corral_y(n)
         Moving_nest(n)%mn_flag%outatcf_lun            = outatcf_lun(n)
       else
+        Moving_nest(n)%first_nest_move                = .False.
         Moving_nest(n)%mn_flag%is_moving_nest         = .false.
+        Moving_nest(n)%mn_flag%static_grid_ratio      = 0.50
         Moving_nest(n)%mn_flag%vortex_tracker         = 0
         Moving_nest(n)%mn_flag%ntrack                 = 1
         Moving_nest(n)%mn_flag%move_cd_x              = 0
@@ -291,16 +312,14 @@ contains
       endif
     enddo
 
-
     call read_input_nml(Atm(this_grid)%nml_filename) !re-reads into internal namelist
-
 
   end subroutine fv_moving_nest_init
 
   subroutine read_namelist_moving_nest_nml
     integer :: f_unit, ios, ierr
     namelist /fv_moving_nest_nml/ surface_dir, is_moving_nest, terrain_smoother, &
-        vortex_tracker, ntrack, move_cd_x, move_cd_y, corral_x, corral_y, outatcf_lun
+        static_grid_ratio, vortex_tracker, ntrack, move_cd_x, move_cd_y, corral_x, corral_y, outatcf_lun
 
 #ifdef INTERNAL_FILE_NML
     read (input_nml_file,fv_moving_nest_nml,iostat=ios)
@@ -339,8 +358,12 @@ contains
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
     type(fv_moving_nest_prog_type), intent(inout) :: mn_prog
 
-    allocate ( mn_prog%delz(isd:ied, jsd:jed, 1:npz) )
-    mn_prog%delz = +99999.9
+    ! This allocate call will happen more than once for parents of multiple nests.
+
+    if (.not. allocated(mn_prog%delz)) then
+      allocate ( mn_prog%delz(isd:ied, jsd:jed, 1:npz) )
+      mn_prog%delz = +99999.9
+    endif
 
   end subroutine allocate_fv_moving_nest_prog_type
 
@@ -358,6 +381,11 @@ contains
     type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
 
     ! The local/temporary variables need to be allocated to the larger data (compute + halos) domain so that the nest motion code has halos to use
+
+    ! This allocate call will happen more than once for parents of multiple nests.
+    if (allocated(mn_phys%ts)) then
+      return
+    endif
     allocate ( mn_phys%ts(isd:ied, jsd:jed) )
 
     if (move_physics) then
