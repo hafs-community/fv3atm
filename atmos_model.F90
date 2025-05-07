@@ -88,7 +88,9 @@ use CCPP_data,          only: ccpp_suite, GFS_control, &
 use GFS_init,           only: GFS_initialize
 use CCPP_driver,        only: CCPP_step, non_uniform_blocks
 
-use stochastic_physics_wrapper_mod, only: stochastic_physics_wrapper,stochastic_physics_wrapper_end
+use stochastic_physics_wrapper_mod, only: stochastic_physics_wrapper, &
+                              stochastic_physics_wrapper_end, &
+                              stochastic_physics_stub
 
 use fv3atm_history_io_mod,    only: fv3atm_diag_register, fv3atm_diag_output,  &
                               DIAG_SIZE
@@ -779,7 +781,8 @@ subroutine atmos_model_init (Atmos, Time_init, Time, Time_step)
 !--- Initialize stochastic physics pattern generation / cellular automata for first time step
      call stochastic_physics_wrapper(GFS_control, GFS_data, Atm_block, ierr)
      if (ierr/=0)  call mpp_error(FATAL, 'Call to stochastic_physics_wrapper failed')
-
+   else
+     call stochastic_physics_stub(GFS_control)
    endif
 
    !--- set the initial diagnostic timestamp

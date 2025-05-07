@@ -1,5 +1,5 @@
 module stochastic_physics_wrapper_mod
-
+  use mpi_f08, only: MPI_Comm
   use machine, only: kind_phys
 
   implicit none
@@ -45,6 +45,11 @@ module stochastic_physics_wrapper_mod
   real(kind=kind_phys), dimension(:,:),   allocatable, save :: ca_deep_cpl, ca_turb_cpl, ca_shal_cpl
   real(kind=kind_phys), dimension(:,:),   allocatable, save :: ca1_cpl, ca2_cpl, ca3_cpl
 
+ ! Stochastic physics needs different communicators for each mosaic (domain).
+ ! Communicator for this mosaic (domain) initialized in stochastic_physics_comm_split
+   type(MPI_Comm) :: stochy_communicator
+ ! Assume the root is always the first rank of that mosaic (domain).
+   integer, parameter :: stochy_comm_root = 0
 
 !----------------
 ! Public Entities
@@ -53,6 +58,38 @@ module stochastic_physics_wrapper_mod
   public stochastic_physics_wrapper
 
   contains
+
+  subroutine stochastic_physics_comm_split (GFS_Control)
+    use mpi_f08
+    use GFS_typedefs,       only: GFS_control_type
+    implicit none
+    type(GFS_control_type),   intent(in) :: GFS_Control
+
+    integer :: color, key, ierror
+
+    color = GFS_Control%master ! Which communicator should this PE be in?
+    key = GFS_Control%me ! Ordering of ranks in the communicators.
+
+    call MPI_Comm_split(GFS_Control%communicator, color, key, stochy_communicator, ierror)
+  end subroutine stochastic_physics_comm_split
+
+  subroutine stochastic_physics_stub(GFS_Control)
+    use GFS_typedefs,       only: GFS_control_type
+    use stochastic_physics, only: init_stochastic_physics_stub
+    implicit none
+    type(GFS_control_type),   intent(inout) :: GFS_Control
+    integer :: ierr
+    initalize_stochastic_physics: if (.not. is_initialized) then
+      ! Call the comm splitter in case another mosaic is using stochastic physics.
+      call stochastic_physics_comm_split(GFS_Control)
+      call init_stochastic_physics_stub(stochy_comm_root, stochy_communicator, ierr)
+      if (ierr/=0)  then
+        write(6,*) 'call to init_stochastic_physics_stub failed'
+        return
+      endif
+      is_initialized = .true.
+    endif initalize_stochastic_physics
+  end subroutine stochastic_physics_stub
 
 !-------------------------------
 !  CCPP step
@@ -68,7 +105,8 @@ module stochastic_physics_wrapper_mod
     use block_control_mod,  only: block_control_type
     use atmosphere_mod,     only: Atm, mygrid
 
-    use stochastic_physics,           only: init_stochastic_physics, run_stochastic_physics
+    use stochastic_physics,           only: init_stochastic_physics, run_stochastic_physics, &
+                                            init_stochastic_physics_stub
     use cellular_automata_global_mod, only: cellular_automata_global
     use cellular_automata_sgs_mod,    only: cellular_automata_sgs
     use lndp_apply_perts_mod,         only: lndp_apply_perts
@@ -98,6 +136,9 @@ module stochastic_physics_wrapper_mod
 
     initalize_stochastic_physics: if (.not. is_initialized) then
 
+      ! Different communicator for each mosaic (domain)
+      call stochastic_physics_comm_split(GFS_Control)
+
       if (GFS_Control%do_sppt .OR. GFS_Control%do_shum .OR. GFS_Control%do_skeb .OR. (GFS_Control%lndp_type > 0) .OR. GFS_Control%do_spp) then
          allocate(xlat(1:nblks,maxblk))
          allocate(xlon(1:nblks,maxblk))
@@ -111,11 +152,17 @@ module stochastic_physics_wrapper_mod
             GFS_Control%do_skeb, GFS_Control%lndp_type, GFS_Control%n_var_lndp, GFS_Control%use_zmtnblck, GFS_Control%skeb_npass,     &
             GFS_Control%lndp_var_list, GFS_Control%lndp_prt_list,    &
             GFS_Control%n_var_spp, GFS_Control%spp_var_list, GFS_Control%spp_prt_list, GFS_Control%spp_stddev_cutoff, GFS_Control%do_spp,                            &
-            GFS_Control%ak, GFS_Control%bk, nthreads, GFS_Control%master, GFS_Control%communicator, ierr)
+            GFS_Control%ak, GFS_Control%bk, nthreads, stochy_comm_root, stochy_communicator, ierr)
             if (ierr/=0)  then
                     write(6,*) 'call to init_stochastic_physics failed'
                     return
             endif
+      else
+        call init_stochastic_physics_stub(stochy_comm_root, stochy_communicator, ierr)
+        if (ierr/=0)  then
+          write(6,*) 'call to init_stochastic_physics_stub failed'
+          return
+        endif
       end if
       if (GFS_Control%do_sppt) then
          allocate(sppt_wts(1:nblks,maxblk,1:levs))
@@ -179,7 +226,7 @@ module stochastic_physics_wrapper_mod
 
       if ( GFS_Control%lndp_type == 1 ) then ! this scheme sets perts once
          allocate(sfc_wts(1:nblks, maxblk, GFS_Control%n_var_lndp))
-         call run_stochastic_physics(levs, GFS_Control%kdt, GFS_Control%fhour, GFS_Control%blksz,       &
+         call run_stochastic_physics(levs, GFS_Control%kdt, GFS_Control%fhour, GFS_Control%blksz, xlon, xlat, &
                                      sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts,         &
                                      skebv_wts=skebv_wts, sfc_wts=sfc_wts,                              &
                                      spp_wts=spp_wts, nthreads=nthreads)
@@ -216,7 +263,11 @@ module stochastic_physics_wrapper_mod
 
     else initalize_stochastic_physics
       if (GFS_Control%do_sppt .OR. GFS_Control%do_shum .OR. GFS_Control%do_skeb .OR. (GFS_Control%lndp_type == 2) .OR. GFS_Control%do_spp) then
-         call run_stochastic_physics(levs, GFS_Control%kdt, GFS_Control%fhour, GFS_Control%blksz, &
+         do nb=1,nblks
+            xlat(nb,1:GFS_Control%blksz(nb)) = GFS_Data(nb)%Grid%xlat(:)
+            xlon(nb,1:GFS_Control%blksz(nb)) = GFS_Data(nb)%Grid%xlon(:)
+         end do
+         call run_stochastic_physics(levs, GFS_Control%kdt, GFS_Control%fhour, GFS_Control%blksz, xlon, xlat, &
                                  sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts, skebv_wts=skebv_wts, sfc_wts=sfc_wts, &
                                  spp_wts=spp_wts, nthreads=nthreads)
          ! Copy contiguous data back
