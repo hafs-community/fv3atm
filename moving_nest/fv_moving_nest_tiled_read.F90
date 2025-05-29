@@ -166,7 +166,7 @@ contains
     integer :: this_pe
 
     this_pe = mpp_pe()
-    
+
     if (.not. allocated(tile_grid)) then
       print '("[ERROR] WDR compare_tile_grids npe=",I0," ",A32," tile_grid not allocated.")', this_pe, var_name
       return
@@ -175,12 +175,12 @@ contains
       print '("[ERROR] WDR compare_tile_grids npe=",I0," ",A32," full_grid not allocated.")', this_pe, var_name
       return
     endif
-    
+
     tis = lbound(tile_grid,1)
     tie = ubound(tile_grid,1)
     tjs = lbound(tile_grid,2)
     tje = ubound(tile_grid,2)
-    
+
     fis = lbound(full_grid,1)
     fie = ubound(full_grid,1)
     fjs = lbound(full_grid,2)
@@ -196,7 +196,7 @@ contains
       print '("[ERROR] WDR compare_tile_grids npe=",I0," ",A32," tile_grid outside of full_grid.")', this_pe, var_name
       return
     endif
-    
+
     do i=tis, tie
       do j=tjs, tje
         if (tile_grid(i,j) .eq. full_grid(i,j)) then
@@ -210,7 +210,7 @@ contains
     enddo
 
     print '("[INFO] WDR compare_tile_grids npe=",I0," total ",A32," num_matches=",I0," num_mismatches=",I0)', this_pe, var_name, num_matches, num_mismatches
-        
+
   end subroutine compare_tile_grids
 
   !>@brief The subroutine 'mn_replace_low_values' replaces low values with a default value.
@@ -297,7 +297,7 @@ contains
     integer :: this_pe
 
     this_pe = mpp_pe()
-    
+
     ! Nest runs in x direction from ioffset to ioffset + nest_nx
     nsx = (ioffset -1 ) * refine - halo
     nex = (ioffset -1 ) * refine + nest_nx + halo
@@ -307,10 +307,10 @@ contains
 
     ! Tile runs in x direction from tile_ioffset to tile_ioffset + tile_nx
     tsx = tile_ioffset
-    tex = tile_ioffset + tile_nx
+    tex = tile_ioffset + tile_nx - 1
     ! Tile runs in y direction from tile_joffset to tile_joffset + tile_ny
     tsy = tile_joffset
-    tey = tile_joffset + tile_ny
+    tey = tile_joffset + tile_ny - 1
 
     is_grid_inside_tile = .False.
 
@@ -326,7 +326,7 @@ contains
     !  print '("[INFO] WDR is_grid_inside_tile npe=",I0," nest nx=",I0," ny=",I0," ioffset=",I0," joffset=",I0)', this_pe, nest_ny, nest_ny, ioffset, joffset
     !  print '("[INFO] WDR is_grid_inside_tile npe=",I0," tile nx=",I0," ny=",I0," ioffset=",I0," joffset=",I0)', this_pe, tile_ny, tile_ny, tile_ioffset, tile_joffset
     !endif
-    
+
   end function is_grid_inside_tile
 
   logical function is_grid_inside_full_tile(nest_nx, nest_ny, ioffset, joffset, tile_nx, tile_ny, tile_ioffset, tile_joffset)
@@ -341,13 +341,13 @@ contains
     integer :: this_pe
 
     this_pe = mpp_pe()
-    
+
     ! Nest runs in x direction from ioffset to ioffset + nest_nx
     nsx = ioffset
-    nex = ioffset + nest_nx 
+    nex = ioffset + nest_nx
     ! Nest runs in y direction from joffset to joffset + nest_ny
     nsy = joffset
-    ney = joffset + nest_ny 
+    ney = joffset + nest_ny
 
     ! Tile runs in x direction from tile_ioffset to tile_ioffset + tile_nx
     tsx = tile_ioffset
@@ -370,7 +370,7 @@ contains
     !  print '("[INFO] WDR is_grid_inside_full_tile npe=",I0," nest nx=",I0," ny=",I0," ioffset=",I0," joffset=",I0)', this_pe, nest_ny, nest_ny, ioffset, joffset
     !  print '("[INFO] WDR is_grid_inside_full_tile npe=",I0," tile nx=",I0," ny=",I0," ioffset=",I0," joffset=",I0)', this_pe, tile_ny, tile_ny, tile_ioffset, tile_joffset
     !endif
-    
+
   end function is_grid_inside_full_tile
 
 
@@ -390,6 +390,9 @@ contains
 
     integer :: half_nx, half_ny
 
+!    integer :: this_pe
+!    this_pe = mpp_pe()
+
     half_nx = nx/2
     half_ny = ny/2
 
@@ -399,6 +402,8 @@ contains
     min_y = center_y - half_ny
     max_y = center_y + half_ny
 
+!    if (this_pe .eq. 1199) print '("[INFO] WDR FX grid_edges npe=",I0," nx=",I0," ny=",I0," half_nx=",I0," half_ny=",I0," min_x=",I0," max_x=",I0," min_y=",I0," max_y=",I0)',this_pe, nx, ny, half_nx, half_ny, min_x, max_x, min_y, max_y
+
   end subroutine get_grid_edges_from_center
 
   subroutine get_grid_offset_from_center(nx, ny, center_x, center_y, ioffset, joffset)
@@ -407,11 +412,16 @@ contains
 
     integer :: half_nx, half_ny
 
+!    integer :: this_pe
+!    this_pe = mpp_pe()
+
     half_nx = nx/2
     half_ny = ny/2
 
     ioffset = center_x - half_nx
     joffset = center_y - half_ny
+
+!    if (this_pe .eq. 1199) print '("[INFO] WDR FX grid_offsets npe=",I0," nx=",I0," ny=",I0," half_nx=",I0," half_ny=",I0," ioffset=",I0," joffset=",I0)',this_pe, nx, ny, half_nx, half_ny, ioffset, joffset
 
   end subroutine get_grid_offset_from_center
 
@@ -452,11 +462,11 @@ contains
       do_read = .False.
       is_inside = is_grid_inside_tile(nest_nx, nest_ny, nest_ioffset, nest_joffset, refine, halo, tile_nx, tile_ny, tile_ioffset, tile_joffset)
     endif
-    
+
     if (.not. is_inside) then
 
       do_read = .True.
-      
+
       ! Move the tile area to be centered on the new nest location.
       !  This may be a big jump of location, many points -- we don't usually want to reread each nest move
       !  Choose new location, but then back off if it is over the edge of the parent domain
@@ -511,9 +521,9 @@ contains
     integer :: i,j
     integer :: this_pe
     integer :: halo = 3
-    
+
     logical, save     :: first_call = .true.
-    
+
     this_pe = mpp_pe()
 
     total_bytes = 0
@@ -532,7 +542,7 @@ contains
 
     call trigger_reread_static_data(fp_nx, fp_ny, nest_nx, nest_ny, tile_nx, tile_ny, ioffset, joffset, tile_ioffset, tile_joffset, refine, halo, first_call, allow_early_read, do_read, new_tile_ioffset, new_tile_joffset)
     if (first_call) first_call=.False.
-      
+
     !print '("[INFO] WDR check_update_static_tile_data npe=",I0," do_read=",L1)', this_pe, do_read
 
     if (do_read) then
@@ -547,7 +557,7 @@ contains
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "substrate_temperature", "geolat", st%deep_lat, num_bytes, parent_tile)
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "substrate_temperature", "geolon", st%deep_lon, num_bytes, parent_tile)
-      
+
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "soil_type", "soil_type", st%soil_type_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
@@ -581,7 +591,7 @@ contains
       total_bytes = total_bytes + num_bytes
 
       if (allocated(st%facwf_grid)) deallocate(st%facwf_grid)
-      
+
       allocate(st%facwf_grid(lbound(st%facsf_grid,1):ubound(st%facsf_grid,1),lbound(st%facsf_grid,2):ubound(st%facsf_grid,2)))
       total_bytes = total_bytes + num_bytes
 
@@ -637,7 +647,7 @@ contains
 
     endif
 
-!    print '("[INFO] WDR TILE A4a check_update_static_tile_data npe=",I0," allocated(st%deep_soil_temp_grid)=",L1," allocated(child_moving_nest%mn_static%deep_soil_temp_grid)=",L1)', this_pe, allocated(st%deep_soil_temp_grid), allocated(child_moving_nest%mn_static%deep_soil_temp_grid)    
+!    print '("[INFO] WDR TILE A4a check_update_static_tile_data npe=",I0," allocated(st%deep_soil_temp_grid)=",L1," allocated(child_moving_nest%mn_static%deep_soil_temp_grid)=",L1)', this_pe, allocated(st%deep_soil_temp_grid), allocated(child_moving_nest%mn_static%deep_soil_temp_grid)
     !print '("[INFO] WDR TILE A4a check_update_static_tile_data npe=",I0," allocated(st%deep_soil_temp_grid)=",L1)', this_pe, allocated(st%deep_soil_temp_grid)
 
   end subroutine check_update_static_tile_data
@@ -748,16 +758,16 @@ contains
     integer                      :: this_pe
 
     !real*4, allocatable :: local_data_array(:,:,:)
-    
+
     ! Allocate data_array to match the expected data size, then read in the data
     ! This subroutine consolidates the allocation and reading of data to ensure consistency of data sizing and simplify code
     ! Could later extend this function to determine data size based on netCDF file metadata
 
     this_pe = mpp_pe()
     dim_sizes = -1
-    
+
     !print '("[INFO] WDR alloc_read_tiled_data_r4_2d AA npe=",I0," nc_filename=",A80)', this_pe, nc_filename
-    
+
     corner(1) = tile_ioffset
     corner(2) = tile_joffset
     corner(3) = 0
@@ -775,7 +785,7 @@ contains
     allocate(data_array(tile_ioffset:tile_ioffset+x_size-1, tile_joffset:tile_joffset+y_size-1))
     data_array = -9999.9
 
-    
+
     !print '("[INFO] WDR alloc_read_tiled_data_r4_2d BB npe=",I0," DIMSIZE alloc ",A32,"(",I0,"-",I0,",",I0,"-",I0,")")', this_pe, var_name, tile_ioffset, tile_ioffset+x_size-1, tile_joffset, tile_joffset+y_size-1
 
     if (present(time)) then
