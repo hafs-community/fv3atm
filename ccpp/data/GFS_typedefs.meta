@@ -1511,6 +1511,14 @@
   type = real
   kind = kind_phys
   active = (control_for_land_surface_scheme == identifier_for_noahmp_land_surface_scheme)
+[dzsno]
+  standard_name = thickness_of_snow_layers
+  long_name = thickness of snow layers
+  units = m
+  dimensions = (lower_bound_of_vertical_dimension_of_surface_snow:0)
+  type = real
+  kind = kind_phys
+  active = (control_for_land_surface_scheme == identifier_for_noahmp_land_surface_scheme)
 [tvxy]
   standard_name = canopy_temperature
   long_name = vegetation temperature
@@ -1652,6 +1660,14 @@
   long_name = depth from the top of the snow surface at the bottom of the layer
   units = m
   dimensions = (horizontal_dimension, lower_bound_of_vertical_dimension_of_surface_snow:vertical_dimension_of_soil_internal_to_land_surface_scheme)
+  type = real
+  kind = kind_phys
+  active = (control_for_land_surface_scheme == identifier_for_noahmp_land_surface_scheme)
+[dzsnso]
+  standard_name = thickness_snow_soil_layers
+  long_name = thickness of snow and soil layers
+  units = m
+  dimensions = (lower_bound_of_vertical_dimension_of_surface_snow:vertical_dimension_of_soil_internal_to_land_surface_scheme)
   type = real
   kind = kind_phys
   active = (control_for_land_surface_scheme == identifier_for_noahmp_land_surface_scheme)
