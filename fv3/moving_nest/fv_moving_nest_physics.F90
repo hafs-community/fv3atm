@@ -808,17 +808,6 @@ contains
                   GFS_sfcprop%snicexy(im,k) = 1.0 * GFS_sfcprop%dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
                 enddo
 
-            do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
-              GFS_sfcprop%snicexy(im,k)    = mn_phys%snicexy(i,j,k)
-              GFS_sfcprop%snliqxy(im,k)    = mn_phys%snliqxy(i,j,k)
-              GFS_sfcprop%tsnoxy(im,k)     = mn_phys%tsnoxy(i,j,k)
-            enddo
-
-
-            do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsoil
-              GFS_sfcprop%zsnsoxy(im,k)    = mn_phys%zsnsoxy(i,j,k)
-            enddo
-
           do k = isnow, 0
            GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
           enddo
@@ -882,7 +871,6 @@ contains
     ! (/0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0/) -- 3 snow levels, 4 soil levels
     ! TODO make this more flexible for number of snow and soil levels
       !do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsoil
-
     real(kind=kind_phys) :: zsns_default(-2:4)
 
     if (GFS_control%lsm == GFS_control%lsm_noahmp) then
@@ -1357,7 +1345,6 @@ contains
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
           is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_LAND, 0.0D0)
 
-
       call fill_nest_halos_from_parent_masked("smoiseq", mn_phys%smoiseq, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, & 
           x_refine, y_refine, &
@@ -1461,7 +1448,6 @@ contains
     if (move_physics .and. GFS_control%lsm == GFS_control%lsm_noahmp) then
       call mn_var_fill_intern_nest_halos(mn_phys%soilcolor, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%snowxy, domain_fine, is_fine_pe)
-
       call mn_var_fill_intern_nest_halos(mn_phys%tvxy, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%tgxy, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%canicexy, domain_fine, is_fine_pe)
@@ -1725,15 +1711,9 @@ contains
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%smoiseq, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsoil)
-
-
       call mn_var_shift_data(mn_phys%snicexy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
-
-!     call mn_var_shift_data(mn_phys%dzsno, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
-!         delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
- 
-  call mn_var_shift_data(mn_phys%snliqxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+      call mn_var_shift_data(mn_phys%snliqxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
       call mn_var_shift_data(mn_phys%snowd, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
