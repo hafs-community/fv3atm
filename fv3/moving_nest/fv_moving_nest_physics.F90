@@ -532,6 +532,7 @@ contains
     integer :: isnow
 
     real(kind=kind_phys) :: dzs(1:4)
+    real(kind=kind_phys) :: porosity(1:19)
 
 
     type(fv_moving_nest_physics_type), pointer       :: mn_phys
@@ -540,6 +541,9 @@ contains
     mn_phys => Moving_nest(n)%mn_phys
 
     dzs = [0.1,0.3,0.6,1.0] ! 4 layer soil thickness
+    porosity = [0.339,0.421,0.434,0.476,0.484,0.439,0.404,0.464, \
+                0.465,0.406,0.468,0.468,0.439,1.000,0.200,0.421, \
+                0.468,0.200,0.339]
 
     !  Needed to fill the local grids for parent and nest PEs in order to transmit/interpolate data from parent to nest
     !  But only the nest PE's have changed the values with nest motion, so they are the only ones that need to update the original arrays
@@ -744,6 +748,13 @@ contains
 
             do k = 1, GFS_control%lsoil
                GFS_sfcprop%smoiseq(im,k)    = mn_phys%smoiseq(i,j,k)
+            enddo
+
+   ! soil moisture check against uplimit porosity for Noah MP LSM
+
+            do k = 1, GFS_control%lsoil
+              GFS_sfcprop%smc(im,k) = min(mn_phys%smc(i,j,k),porosity(GFS_sfcprop%stype(im))-0.01) 
+              GFS_sfcprop%slc(im,k) = min(mn_phys%slc(i,j,k),porosity(GFS_sfcprop%stype(im))-0.01)
             enddo
 
    ! use snowd and weasd to set snow related variables, and set soil related quantities over land ice
@@ -1711,9 +1722,17 @@ contains
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%smoiseq, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsoil)
+<<<<<<< HEAD
+
+      call mn_var_shift_data(mn_phys%snicexy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
+ 
+  call mn_var_shift_data(mn_phys%snliqxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+=======
       call mn_var_shift_data(mn_phys%snicexy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
       call mn_var_shift_data(mn_phys%snliqxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+>>>>>>> c04746498544b4383d99fca8fb125440e5b2a883
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
       call mn_var_shift_data(mn_phys%snowd, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
