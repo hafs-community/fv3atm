@@ -144,6 +144,9 @@ module fv_moving_nest_types_mod
   type fv_moving_nest_physics_type
     real, _ALLOCATABLE                  :: ts(:,:)          _NULL   !< 2D skin temperature/SST
     real, _ALLOCATABLE                  :: slmsk(:,:)       _NULL   !< land sea mask -- 0 for ocean/lakes, 1, for land.  Perhaps 2 for sea ice.
+
+    logical, _ALLOCATABLE               :: leading_edge(:,:) _NULL  !< logical array -- at each nest move timestep, is this point getting interpolated values at the leading edge
+
     real (kind=kind_phys), _ALLOCATABLE :: smc (:,:,:)      _NULL   !< soil moisture content
     real (kind=kind_phys), _ALLOCATABLE :: stc (:,:,:)      _NULL   !< soil temperature
     real (kind=kind_phys), _ALLOCATABLE :: slc (:,:,:)      _NULL   !< soil liquid water content
@@ -314,6 +317,37 @@ module fv_moving_nest_types_mod
 
 contains
 
+  subroutine mn_set_leading_edge(mn_phys, isd, ied, jsd, jed, ioffset, joffset)
+    type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
+    integer, intent(in)                              :: isd, ied, jsd, jed
+    integer, intent(in)                              :: ioffset, joffset
+
+    mn_phys%leading_edge = .False.
+
+    mn_phys%leading_edge(isd:isd+2,:) = .True.
+    mn_phys%leading_edge(ied-2:ied,:) = .True.
+
+    mn_phys%leading_edge(:, jsd:jsd+2) = .True.
+    mn_phys%leading_edge(:, jed-2:jed) = .True.
+
+    if (ioffset .eq. 1) then
+      mn_phys%leading_edge(isd+3:isd+5, :) = .True.
+    endif
+    if (ioffset .eq. -1) then
+      mn_phys%leading_edge(ied-5:isd-3, :) = .True.
+    endif
+
+    if (joffset .eq. 1) then
+      mn_phys%leading_edge(: ,jsd+3:jsd+5) = .True.
+    endif
+    if (joffset .eq. -1) then
+      mn_phys%leading_edge(:, jed-5:jsd-3) = .True.
+    endif
+
+  end subroutine mn_set_leading_edge
+
+
+  
   subroutine fv_moving_nest_init(Atm, this_grid)
     type(fv_atmos_type), allocatable, intent(in) :: Atm(:)
     integer, intent(in)                          :: this_grid
@@ -592,6 +626,8 @@ contains
     !print '("[INFO] WDR allocate_fv_moving_nest_physics_type npe=",I0," lsnow_lbound=",I0," lsnow_ubound=",I0," lsoil=",I0)', mpp_pe(), lsnow_lbound, lsnow_ubound, lsoil
 
     if (move_physics) then
+      allocate ( mn_phys%leading_edge (isd:ied, jsd:jed) )
+
       allocate ( mn_phys%slmsk(isd:ied, jsd:jed) )
       allocate ( mn_phys%smc(isd:ied, jsd:jed, lsoil) )
       allocate ( mn_phys%stc(isd:ied, jsd:jed, lsoil) )
@@ -721,6 +757,8 @@ contains
 
     mn_phys%ts = +99999.9
     if (move_physics) then
+      mn_phys%leading_edge = .false.
+
       mn_phys%slmsk = +99999.9
       mn_phys%smc = +99999.9
       mn_phys%stc = +99999.9
@@ -865,6 +903,7 @@ contains
 
     !  if move_phys
     if (allocated(mn_phys%smc)) then
+      deallocate( mn_phys%leading_edge )
       deallocate( mn_phys%slmsk )
       deallocate( mn_phys%smc )
       deallocate( mn_phys%stc )
