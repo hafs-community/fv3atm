@@ -745,12 +745,26 @@ contains
             GFS_sfcprop%smcwtdxy(im)   = mn_phys%smcwtdxy(i,j)
             GFS_sfcprop%deeprechxy(im) = mn_phys%deeprechxy(i,j)
             GFS_sfcprop%rechxy(im)     = mn_phys%rechxy(i,j)
+            GFS_sfcprop%snowxy(im)     = mn_phys%snowxy(i,j)
 
             do k = 1, GFS_control%lsoil
                GFS_sfcprop%smoiseq(im,k)    = mn_phys%smoiseq(i,j,k)
             enddo
 
-   ! soil moisture check against uplimit porosity for Noah MP LSM
+               isnow = nint(GFS_sfcprop%snowxy(im)) + 1
+
+            do k = isnow, 0
+               GFS_sfcprop%tsnoxy(im,k)    = mn_phys%tsnoxy(i,j,k)
+               GFS_sfcprop%snicexy(im,k)   = mn_phys%snicexy(i,j,k)
+               GFS_sfcprop%snliqxy(im,k)   = mn_phys%snliqxy(i,j,k)
+            enddo
+
+           do k = isnow, GFS_control%lsoil
+               GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
+           enddo
+
+
+   ! soil moisture check against uplimit porosity when Noah MP LSM is used
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01) 
@@ -779,6 +793,8 @@ contains
               GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0  !snowd is snwdph in mm. divide by 10.
            endif
 
+          if (mn_phys%leading_edge(i,j)) then   ! reset Noah MP snow fields on new land points only
+
             if (GFS_sfcprop%snowd(im)/1000.0 < 0.025) then
                     GFS_sfcprop%snowxy(im) = 0
                     GFS_sfcprop%dzsno(-2:0) = 0.0
@@ -806,9 +822,10 @@ contains
                  else
                    write(*,*)  'Error in fv_moving_nest_physics.F90 Problem with the logic assigning snow layers '
                    stop
+
                  endif
 
-                 isnow = nint(GFS_sfcprop%snowxy(im)) + 1
+                 isnow = nint(GFS_sfcprop%snowxy(im)) + 1 ! new snow layers at new land points
 
                  do k = isnow, 0
 
@@ -817,7 +834,9 @@ contains
 
                   GFS_sfcprop%snliqxy(im,k) = 0.0
                   GFS_sfcprop%snicexy(im,k) = 1.0 * GFS_sfcprop%dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
+
                 enddo
+
 
           do k = isnow, 0
            GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
@@ -834,6 +853,7 @@ contains
            enddo
 
           endif
+        endif
 
           ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
           if ( (int(GFS_sfcprop%slmsk(im)) .eq. 1) )  then
@@ -854,8 +874,10 @@ contains
             endif
 
           endif
+
         enddo
       enddo
+
     endif
 
   end subroutine mn_phys_apply_temp_variables
