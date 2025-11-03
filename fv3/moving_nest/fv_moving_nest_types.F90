@@ -338,14 +338,14 @@ contains
       mn_phys%leading_edge(isd+3:isd+5, :) = .True.
     endif
     if (ioffset .eq. -1) then
-      mn_phys%leading_edge(ied-5:isd-3, :) = .True.
+      mn_phys%leading_edge(ied-5:ied-3, :) = .True.
     endif
 
     if (joffset .eq. 1) then
       mn_phys%leading_edge(: ,jsd+3:jsd+5) = .True.
     endif
     if (joffset .eq. -1) then
-      mn_phys%leading_edge(:, jed-5:jsd-3) = .True.
+      mn_phys%leading_edge(:, jed-5:jed-3) = .True.
     endif
 
   end subroutine mn_set_leading_edge
