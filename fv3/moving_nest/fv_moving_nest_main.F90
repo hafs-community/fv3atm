@@ -99,7 +99,7 @@ module fv_moving_nest_main_mod
   !------------------------------------
 
   use fv_moving_nest_types_mod, only: allocate_fv_moving_nest_prog_type, allocate_fv_moving_nest_physics_type
-  use fv_moving_nest_types_mod, only: deallocate_fv_moving_nests
+  use fv_moving_nest_types_mod, only: deallocate_fv_moving_nests, mn_set_leading_edge
   use fv_moving_nest_types_mod, only: Moving_nest
   use fv_moving_nest_types_mod, only: mn_apply_lakes, mn_overwrite_with_nest_init_values, alloc_set_facwf
   use fv_moving_nest_types_mod, only: mn_static_overwrite_ls_from_nest, mn_static_overwrite_fix_from_nest
@@ -940,6 +940,10 @@ contains
       jstart_coarse = global_nest_domain%jstart_coarse(nest_num)
       jend_coarse = global_nest_domain%jend_coarse(nest_num)
 
+      if (is_fine_pe) then
+        call mn_set_leading_edge(Moving_nest(child_grid_num)%mn_phys, isd, ied, jsd, jed, ioffset, joffset)
+      endif
+      
       ! Allocate the local weight arrays.  TODO OPTIMIZE change to use the ones from the gridstruct
       if (is_fine_pe) then
         allocate(wt_h(Atm(child_grid_num)%bd%isd:Atm(child_grid_num)%bd%ied, Atm(child_grid_num)%bd%jsd:Atm(child_grid_num)%bd%jed, 4))
