@@ -2711,7 +2711,6 @@ module GFS_typedefs
       allocate (Sfcprop%smoiseq    (IM, Model%lsoil_lsm))
       allocate (Sfcprop%zsnsoxy    (IM, Model%lsnow_lsm_lbound:Model%lsoil_lsm))
 
-
       Sfcprop%snowxy     = clear_val
 
       Sfcprop%dzsno      = clear_val

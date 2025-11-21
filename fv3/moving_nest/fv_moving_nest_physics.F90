@@ -530,20 +530,19 @@ contains
     integer :: this_pe
     integer :: nb, blen, i, j ,k, ix, nv, im
     integer :: isnow
-
     real(kind=kind_phys) :: dzs(1:4)
     real(kind=kind_phys) :: porosity(1:19)
-
-
+    real(kind=kind_phys) :: zsns_default(-2:4)
     type(fv_moving_nest_physics_type), pointer       :: mn_phys
 
     this_pe = mpp_pe()
     mn_phys => Moving_nest(n)%mn_phys
-
     dzs = (/0.1,0.3,0.6,1.0/) ! 4 layer soil thickness
     porosity = (/0.339,0.421,0.434,0.476,0.484,0.439,0.404,0.464, &
-                0.465,0.406,0.468,0.468,0.439,1.000,0.200,0.421, &
-                0.468,0.200,0.339/)
+                 0.465,0.406,0.468,0.468,0.439,1.000,0.200,0.421, &
+                 0.468,0.200,0.339/)
+    zsns_default = (/0.0, 0.0, 0.0,  -0.1,-0.4,-1.0,-2.0 /)
+
 
     !  Needed to fill the local grids for parent and nest PEs in order to transmit/interpolate data from parent to nest
     !  But only the nest PE's have changed the values with nest motion, so they are the only ones that need to update the original arrays
@@ -552,7 +551,7 @@ contains
       ie = Atm(n)%bd%ie
       js = Atm(n)%bd%js
       je = Atm(n)%bd%je
- 
+
       ! SST directly in Atm structure
       Atm(n)%ts(is:ie, js:je) =  mn_phys%ts(is:ie, js:je)
 
@@ -692,7 +691,7 @@ contains
                 GFS_tbd%phy_f3d(im, k, nv) = mn_phys%phy_f3d(i,j,k,nv)
               enddo
             enddo
-          endif 
+          endif
 
           if (move_nsst) then
             GFS_sfcprop%tref(im)    = mn_phys%tref(i,j)
@@ -716,7 +715,7 @@ contains
 
           if (GFS_control%lsm == GFS_control%lsm_noahmp) then
 
-            GFS_sfcprop%scolor(im)     = mn_phys%soilcolor(i,j)
+            GFS_sfcprop%scolor(im)  = mn_phys%soilcolor(i,j)
             GFS_sfcprop%tvxy(im)       = mn_phys%tvxy(i,j)
             GFS_sfcprop%tgxy(im)       = mn_phys%tgxy(i,j)
             GFS_sfcprop%canicexy(im)   = mn_phys%canicexy(i,j)
@@ -745,27 +744,21 @@ contains
             GFS_sfcprop%smcwtdxy(im)   = mn_phys%smcwtdxy(i,j)
             GFS_sfcprop%deeprechxy(im) = mn_phys%deeprechxy(i,j)
             GFS_sfcprop%rechxy(im)     = mn_phys%rechxy(i,j)
-
- ! pass/set the snowd value for reset snow related fields
- 
             GFS_sfcprop%snowd(im)      = mn_phys%snowd(i,j)
             GFS_sfcprop%weasd(im)      = mn_phys%weasd(i,j)
 
-        if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0 ) then 
-            GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0  
-        endif
+            if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0 ) then
+              GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0
+            endif
 
+            do k = 1, GFS_control%lsoil
+               GFS_sfcprop%smoiseq(im,k)    = mn_phys%smoiseq(i,j,k)
+            enddo
 
-   ! soil moisture check against uplimit porosity for some runoff options when Noah MP LSM is used
-
-
-        do k = 1, GFS_control%lsoil
-            GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01) 
-            GFS_sfcprop%slc(im,k) = min(GFS_sfcprop%slc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
-       enddo
-
-
-! set stc,smc,slc,weasd, and snowd over glacier
+            do k = 1, GFS_control%lsoil
+               GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01) 
+               GFS_sfcprop%slc(im,k) = min(GFS_sfcprop%slc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
+            enddo
 
            if (int(GFS_sfcprop%vtype(im))  == 15) then  
              do k = 1,GFS_control%lsoil
@@ -776,19 +769,11 @@ contains
                GFS_sfcprop%weasd(im)       = 600.0   ! 600mm SWE for glacier
                GFS_sfcprop%snowd(im)       = 2000.0  ! 2m snow depth for glacier, snowd/snwdph is in mm
            endif
-!
 
-            do k = 1, GFS_control%lsoil
-               GFS_sfcprop%smoiseq(im,k)    = mn_phys%smoiseq(i,j,k)
-            enddo
-
-! reset snow-related fields over new land points
-
-          if (mn_phys%leading_edge(i,j) == .True. .and. GFS_sfcprop%snowd(im) /= 0.0 ) then  ! with snow 
-
+           if (mn_phys%leading_edge(i,j) == .True. .and. GFS_sfcprop%snowd(im) < 99999.0 ) then  ! with snow 
             if (GFS_sfcprop%snowd(im)/1000.0 < 0.025) then
-                    GFS_sfcprop%snowxy(im) = 0
-                    GFS_sfcprop%dzsno(-2:0) = 0.0
+                   GFS_sfcprop%snowxy(im) = 0
+                   GFS_sfcprop%dzsno(-2:0) = 0.0
                  elseif (GFS_sfcprop%snowd(im)/1000.0 >= 0.025 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.05 ) then
                    GFS_sfcprop%snowxy(im)   = -1.0
                    GFS_sfcprop%dzsno(0)     = GFS_sfcprop%snowd(im)/1000.0
@@ -813,108 +798,88 @@ contains
                  else
                    write(*,*)  'Error in fv_moving_nest_physics.F90 Problem with the logic assigning snow layers '
                    stop
-            endif ! end assigning # of snowxy layer and snow layer thickness over new points using snowd/weasd
+            endif 
 
-                 isnow = nint(GFS_sfcprop%snowxy(im)) + 1 ! new snow layers at new land points
+                 isnow = nint(GFS_sfcprop%snowxy(im)) + 1 
 
-               do k = isnow, 0
-                  GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + (( sum(GFS_sfcprop%dzsno(isnow:k)) - \
-                  0.5*GFS_sfcprop%dzsno(k) )/ GFS_sfcprop%snowd(im)/1000.0)*( GFS_sfcprop%stc(im,1)- GFS_sfcprop%tgxy(im))
-
-                  GFS_sfcprop%snliqxy(im,k) = 0.0
-                  GFS_sfcprop%snicexy(im,k) = 1.0 * GFS_sfcprop%dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
+               do k = isnow,GFS_control%lsnow_lsm_ubound
+                   GFS_sfcprop%tsnoxy(im,k)  = GFS_sfcprop%tgxy(im) + (( sum(GFS_sfcprop%dzsno(isnow:k)) - \
+                    0.5*GFS_sfcprop%dzsno(k) )/ GFS_sfcprop%snowd(im)/1000.0)*(GFS_sfcprop%stc(im,1)- GFS_sfcprop%tgxy(im))
+                   GFS_sfcprop%snliqxy(im,k) = 0.0
+                   GFS_sfcprop%snicexy(im,k) = 1.0 * GFS_sfcprop%dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
                enddo
 
-! use the snow layer thickness 'dzsno' to get soil and snow thickness (adding soil thickness), note the sign change
-
-               do k = isnow, 0
-                  GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
+               do k = isnow,GFS_control%lsnow_lsm_ubound
+                   GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
                enddo
 
-               do k = 1, 4
+               do k = 1, GFS_control%lsoil
                   GFS_sfcprop%dzsnso(k) = -dzs(k)
                enddo
-
-! based on the soil and snow thickness to figure out 'zsnsoxy'
-! zsnsoxy is from snow surface, so all negative values, maybe should change the sign of dzsnso
 
                 GFS_sfcprop%zsnsoxy(im,isnow) =  GFS_sfcprop%dzsnso(isnow)
 
                do k = isnow + 1, GFS_control%lsoil
                 GFS_sfcprop%zsnsoxy(im, k) =  GFS_sfcprop%zsnsoxy(im,k-1) + GFS_sfcprop%dzsnso(k)
                enddo
-       
-  else  ! not a new land point - directly use those shifted values from model
+         else  
 
-            GFS_sfcprop%snowxy(im)     = mn_phys%snowxy(i,j)
+                GFS_sfcprop%snowxy(im)     = mn_phys%snowxy(i,j)
 
-               isnow = nint(GFS_sfcprop%snowxy(im)) + 1
+                isnow = nint(GFS_sfcprop%snowxy(im)) + 1
 
-          if (abs(isnow) < -nint(GFS_control%lsnow_lsm_lbound) ) then    
-
-! Make sure there is snow - not fill value - otherwise k is wrong, out of bound (fill value)
-
-            do k = isnow, 0
-               GFS_sfcprop%tsnoxy(im,k)    = mn_phys%tsnoxy(i,j,k)
-               GFS_sfcprop%snicexy(im,k)   = mn_phys%snicexy(i,j,k)
-               GFS_sfcprop%snliqxy(im,k)   = mn_phys%snliqxy(i,j,k)
+          if (abs(isnow) < GFS_control%lsoil ) then  
+            do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
+              GFS_sfcprop%snicexy(im,k)    = mn_phys%snicexy(i,j,k)
+              GFS_sfcprop%snliqxy(im,k)    = mn_phys%snliqxy(i,j,k)
+              GFS_sfcprop%tsnoxy(im,k)     = mn_phys%tsnoxy(i,j,k)
             enddo
 
            do k = isnow, GFS_control%lsoil
                GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
            enddo
 
-         endif  !only over snow points, may assign a different snowxy value
+         endif  
 
 ! reset snow-related fields on the old glacier points to be consistent with the new glacier land points
-! and set stc, snow temperatures, snice,and snliq like above,special treatment over glacier points 
 
            if (int(GFS_sfcprop%vtype(im))  == 15) then  
-
-                   GFS_sfcprop%weasd(im)    = 600.0   
-                   GFS_sfcprop%snowd(im)    = 2000.0  
-
                    GFS_sfcprop%snowxy(im)   = -3.0
                    GFS_sfcprop%dzsno(-2)    = 0.05
                    GFS_sfcprop%dzsno(-1)    = 0.20
-                   GFS_sfcprop%dzsno(0)     = GFS_sfcprop%snowd(im)/1000.0 - 0.05 - 0.20 ! 1.75 m
-
+                   GFS_sfcprop%dzsno(0)     = GFS_sfcprop%snowd(im)/1000.0 - 0.05 - 0.20
               do k = 1,GFS_control%lsoil
                    GFS_sfcprop%stc(im,k) = min(mn_phys%stc(i,j,k),min(GFS_Sfcprop%tg3(im),263.15))
                    GFS_sfcprop%smc(im,k) = 1.0
                    GFS_sfcprop%slc(im,k) = 0.0
               enddo
 
+               isnow = nint(GFS_sfcprop%snowxy(im)) + 1  
 
-                 isnow = nint(GFS_sfcprop%snowxy(im)) + 1  
-
-             do k = isnow, 0
+             do k = isnow, GFS_control%lsnow_lsm_ubound
                GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + (( sum(GFS_sfcprop%dzsno(isnow:k)) - \
-                  0.5*GFS_sfcprop%dzsno(k) )/ GFS_sfcprop%snowd(im)/1000.0)*( GFS_sfcprop%stc(im,1)- GFS_sfcprop%tgxy(im))
-
+                 0.5*GFS_sfcprop%dzsno(k) )/GFS_sfcprop%snowd(im)/1000.0)*(GFS_sfcprop%stc(im,1)- GFS_sfcprop%tgxy(im))
                GFS_sfcprop%snliqxy(im,k) = 0.0
                GFS_sfcprop%snicexy(im,k) = 1.0 * GFS_sfcprop%dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
              enddo
 
-               do k = isnow, 0
-                  GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
-               enddo
+             do k = isnow, GFS_control%lsnow_lsm_ubound
+               GFS_sfcprop%dzsnso(k) = -GFS_sfcprop%dzsno(k)
+             enddo
 
-               do k = 1, 4
-                  GFS_sfcprop%dzsnso(k) = -dzs(k)
-               enddo
+             do k = 1, GFS_control%lsoil
+               GFS_sfcprop%dzsnso(k) = -dzs(k)
+             enddo
 
                 GFS_sfcprop%zsnsoxy(im,isnow) =  GFS_sfcprop%dzsnso(isnow)
 
-               do k = isnow + 1, GFS_control%lsoil
-                GFS_sfcprop%zsnsoxy(im, k) =  GFS_sfcprop%zsnsoxy(im,k-1) + GFS_sfcprop%dzsnso(k)
-               enddo
+             do k = isnow + 1, GFS_control%lsoil
+               GFS_sfcprop%zsnsoxy(im, k) =  GFS_sfcprop%zsnsoxy(im,k-1) + GFS_sfcprop%dzsnso(k)
+             enddo
 
-           endif ! old glacier land points if any (e.g., after move of a new glacier land point)
-
-
-        endif ! leading_edge block
-      endif   ! move_noahmp
+           endif 
+        endif 
+      endif  
 
           ! Check if stype and vtype are properly set for land points.  Set to reasonable values if they have fill values.
           if ( (int(GFS_sfcprop%slmsk(im)) .eq. 1) )  then
@@ -934,12 +899,10 @@ contains
               GFS_sfcprop%stype_save(im) = 3    ! Force to sandy loam
             endif
 
-          endif ! slmsk = 1
-
-        enddo !ix
-      enddo   !nb
-
-    endif     ! fine pe
+          endif
+        enddo
+      enddo
+    endif
 
   end subroutine mn_phys_apply_temp_variables
 
@@ -1805,6 +1768,8 @@ contains
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%smoiseq, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsoil)
+
+
       call mn_var_shift_data(mn_phys%snicexy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound)
       call mn_var_shift_data(mn_phys%snliqxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
