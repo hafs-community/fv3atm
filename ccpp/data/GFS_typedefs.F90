@@ -337,9 +337,6 @@ module GFS_typedefs
 
 ! -- In/Out for Noah MP
     real (kind=kind_phys), pointer :: snowxy  (:)  => null()  !<
-    real (kind=kind_phys), pointer :: dzsno   (:)  => null()  !<
-    real (kind=kind_phys), pointer :: dzsnso  (:)  => null()  !<
-
     real (kind=kind_phys), pointer :: tvxy    (:)  => null()  !< veg temp
     real (kind=kind_phys), pointer :: tgxy    (:)  => null()  !< ground temp
     real (kind=kind_phys), pointer :: canicexy(:)  => null()  !<
@@ -2674,10 +2671,6 @@ module GFS_typedefs
     if (Model%lsm == Model%lsm_noahmp ) then
 
       allocate (Sfcprop%snowxy   (IM))
-
-      allocate (Sfcprop%dzsno (Model%lsnow_lsm_lbound:Model%lsnow_lsm_ubound))
-      allocate (Sfcprop%dzsnso (Model%lsnow_lsm_lbound:Model%lsoil_lsm))
-
       allocate (Sfcprop%tvxy     (IM))
       allocate (Sfcprop%tgxy     (IM))
       allocate (Sfcprop%canicexy (IM))
@@ -2712,10 +2705,6 @@ module GFS_typedefs
       allocate (Sfcprop%zsnsoxy    (IM, Model%lsnow_lsm_lbound:Model%lsoil_lsm))
 
       Sfcprop%snowxy     = clear_val
-
-      Sfcprop%dzsno      = clear_val
-      Sfcprop%dzsnso     = clear_val
-
       Sfcprop%tvxy       = clear_val
       Sfcprop%tgxy       = clear_val
       Sfcprop%canicexy   = clear_val

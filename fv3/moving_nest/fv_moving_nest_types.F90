@@ -235,10 +235,6 @@ module fv_moving_nest_types_mod
     ! NOAH MP LSM Variables
     real (kind=kind_phys), _ALLOCATABLE :: soilcolor (:,:)     _NULL   !< soil color
     real (kind=kind_phys), _ALLOCATABLE :: snowxy (:,:)     _NULL   !< number of snow layers
-
-    real (kind=kind_phys), _ALLOCATABLE :: dzsno (:)         _NULL   !< number of snow layers
-    real (kind=kind_phys), _ALLOCATABLE :: dzsnso (:)        _NULL   !< number of snow layers
-
     real (kind=kind_phys), _ALLOCATABLE :: tvxy (:,:)       _NULL   !< canopy temperature
     real (kind=kind_phys), _ALLOCATABLE :: tgxy (:,:)       _NULL   !< ground temperature
     real (kind=kind_phys), _ALLOCATABLE :: canicexy (:,:)   _NULL   !< canopy intercepted ice mass
@@ -719,10 +715,6 @@ contains
     if (move_noahmp) then
       allocate ( mn_phys%soilcolor(isd:ied, jsd:jed) )
       allocate ( mn_phys%snowxy(isd:ied, jsd:jed) )
-
-      allocate ( mn_phys%dzsno(lsnow_lbound:lsnow_ubound) )
-      allocate ( mn_phys%dzsnso(lsnow_lbound:lsoil) )
-
       allocate ( mn_phys%tvxy(isd:ied, jsd:jed) )
       allocate ( mn_phys%tgxy(isd:ied, jsd:jed) )
       allocate ( mn_phys%canicexy(isd:ied, jsd:jed) )
@@ -857,10 +849,6 @@ contains
     if (move_noahmp) then
       mn_phys%soilcolor = +99999.9
       mn_phys%snowxy = +99999.9
-
-      mn_phys%dzsno = +99999.9
-      mn_phys%dzsnso = +99999.9
-
       mn_phys%tvxy = +99999.9
       mn_phys%tgxy = +99999.9
       mn_phys%canicexy = +99999.9
@@ -1006,10 +994,6 @@ contains
     if (allocated(mn_phys%snowxy)) then
       deallocate ( mn_phys%soilcolor )
       deallocate ( mn_phys%snowxy )
-
-      deallocate ( mn_phys%dzsno )
-      deallocate ( mn_phys%dzsnso )
-
       deallocate ( mn_phys%tvxy )
       deallocate ( mn_phys%tgxy )
       deallocate ( mn_phys%canicexy )
