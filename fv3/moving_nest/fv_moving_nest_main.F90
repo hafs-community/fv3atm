@@ -939,10 +939,6 @@ contains
       iend_coarse = global_nest_domain%iend_coarse(nest_num)
       jstart_coarse = global_nest_domain%jstart_coarse(nest_num)
       jend_coarse = global_nest_domain%jend_coarse(nest_num)
-
-      if (is_fine_pe) then
-        call mn_set_leading_edge(Moving_nest(child_grid_num)%mn_phys, isd, ied, jsd, jed, ioffset, joffset)
-      endif
       
       ! Allocate the local weight arrays.  TODO OPTIMIZE change to use the ones from the gridstruct
       if (is_fine_pe) then
@@ -1322,6 +1318,10 @@ contains
            enddo
          enddo
        endif
+
+      if (is_fine_pe) then
+        call mn_set_leading_edge(Moving_nest(child_grid_num)%mn_phys, isd, ied, jsd, jed, delta_i_c, delta_j_c)
+      endif
 
       call mn_prog_apply_temp_variables(Atm, n, child_grid_num, is_fine_pe, npz)
       call mn_phys_apply_temp_variables(Atm, Atm_block, GFS_control, GFS_sfcprop, GFS_tbd, GFS_cldprop, GFS_intdiag, n, child_grid_num, is_fine_pe, npz)
