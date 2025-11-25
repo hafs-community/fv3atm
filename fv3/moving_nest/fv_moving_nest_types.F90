@@ -766,7 +766,6 @@ contains
       allocate ( mn_phys%sncovr(isd:ied, jsd:jed) )
       allocate ( mn_phys%fice(isd:ied, jsd:jed) )
       allocate ( mn_phys%hice(isd:ied, jsd:jed) )
-
       
       !allocate ( mn_phys%ustar1(isd:ied, jsd:jed) )
     endif

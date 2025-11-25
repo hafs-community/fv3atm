@@ -154,7 +154,6 @@ contains
 
     !print '("[INFO] MASK ICE npe=",I0," parent_ls num_seaice=",I0)',this_pe, num_seaice
 
-
     num_seaice = 0
 
     do i = lbound(mn_static%fp_ls%ls_mask_grid,1), ubound(mn_static%fp_ls%ls_mask_grid,1)
@@ -204,9 +203,6 @@ contains
     !print '("[INFO] MASK END inside mn_phys_apply_coarse_seaice npe=",I0)', this_pe
 
   end subroutine mn_phys_apply_coarse_seaice
-
-
-
 
 
   subroutine mn_phys_set_slmsk(Atm, n, mn_static, ioffset, joffset, refine)
