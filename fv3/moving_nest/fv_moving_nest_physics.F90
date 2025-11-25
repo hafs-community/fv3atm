@@ -119,6 +119,95 @@ module fv_moving_nest_physics_mod
 
 contains
 
+  subroutine mn_phys_apply_coarse_seaice(Atm, n, mn_static, ioffset, joffset, refine)
+    type(fv_atmos_type), intent(inout),allocatable   :: Atm(:)              !< Array of atmospheric data
+    integer, intent(in)                              :: n                   !< Current grid number
+    type(mn_surface_grids), intent(in)               :: mn_static           !< Static surface data
+    integer, intent(in)                              :: ioffset, joffset    !< Current nest offset in i,j direction
+    integer, intent(in)                              :: refine              !< Nest refinement ratio
+
+    integer                 :: i_pe, j_pe               ! indices of the nest on this PE
+    integer                 :: i_idx, j_idx
+    integer                 :: i_parent, j_parent       ! parent indices
+    integer                 :: this_pe, halo
+
+    integer                 :: i,j, num_seaice
+
+    integer, parameter :: M_WATER = 0, M_LAND = 1, M_SEAICE = 2
+
+    this_pe = mpp_pe()
+    ! Should only be run for a fine PE
+
+    !print '("[INFO] MASK BEGIN inside mn_phys_apply_coarse_seaice npe=",I0," n=",I0," refine=",I0," ioffset=",I0," joffset=",I0)', this_pe, n, refine, ioffset, joffset
+    ! Setup local land sea mask grid for masked interpolations
+    ! These are grid centers, not corners
+
+    halo = 3
+
+    num_seaice = 0
+
+    do i = lbound(mn_static%parent_ls%ls_mask_grid,1), ubound(mn_static%parent_ls%ls_mask_grid,1)
+      do j = lbound(mn_static%parent_ls%ls_mask_grid,2), ubound(mn_static%parent_ls%ls_mask_grid,2)
+        if (mn_static%parent_ls%ls_mask_grid(i, j) .eq. M_SEAICE) num_seaice = num_seaice + 1
+      enddo
+    enddo
+
+    !print '("[INFO] MASK ICE npe=",I0," parent_ls num_seaice=",I0)',this_pe, num_seaice
+
+
+    num_seaice = 0
+
+    do i = lbound(mn_static%fp_ls%ls_mask_grid,1), ubound(mn_static%fp_ls%ls_mask_grid,1)
+      do j = lbound(mn_static%fp_ls%ls_mask_grid,2), ubound(mn_static%fp_ls%ls_mask_grid,2)
+        if (mn_static%fp_ls%ls_mask_grid(i, j) .eq. M_SEAICE) num_seaice = num_seaice + 1
+      enddo
+    enddo
+
+    !print '("[INFO] MASK ICE npe=",I0," fp_ls num_seaice=",I0)',this_pe, num_seaice
+
+    do i_pe = Atm(n)%bd%isd, Atm(n)%bd%ied
+      do j_pe = Atm(n)%bd%jsd, Atm(n)%bd%jed
+        i_idx = (ioffset-1)*refine + i_pe
+        j_idx = (joffset-1)*refine + j_pe
+
+        ! Fortran integer division truncates the fractional parts
+        i_parent = ioffset + (i_pe + 3)/refine
+        j_parent = joffset + (j_pe + 3)/refine
+        if (Moving_nest(n)%mn_phys%slmsk(i_pe, j_pe) .eq. M_WATER) then
+          if (mn_static%parent_ls%ls_mask_grid(i_parent, j_parent) .eq. M_SEAICE) then
+            !print '("[INFO] WDR COARSE_SEAICE AA npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+            Moving_nest(n)%mn_phys%slmsk(i_pe, j_pe) = M_SEAICE
+            !print '("[INFO] WDR COARSE_SEAICE ZZ npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+
+            !print '("[INFO] WDR COARSE_SEAICE Z1 npe=",I0," parent geolat_grid(",I0,"-",I0,",",I0,"-",I0,") i_parent=",I0," j_parent=",I0)', this_pe, lbound(mn_static%parent_ls%geolat_grid,1), ubound(mn_static%parent_ls%geolat_grid,1), lbound(mn_static%parent_ls%geolat_grid,2), ubound(mn_static%parent_ls%geolat_grid,2), i_parent, j_parent
+
+            !print '("[INFO] WDR COARSE_SEAICE Z1 npe=",I0," fp geolat_grid(",I0,",",I0,")")', this_pe, ubound(mn_static%fp_ls%geolat_grid,1), ubound(mn_static%fp_ls%geolat_grid,2)
+
+            !print '("[INFO] WDR COARSE_SEAICE Z1 npe=",I0," nest geolat_grid(",I0,"-",I0,",",I0,"-",I0,") i_pe=",I0," j_pe=",I0)', this_pe, lbound(mn_static%nest_ls%geolat_grid,1), ubound(mn_static%nest_ls%geolat_grid,1), lbound(mn_static%nest_ls%geolat_grid,2), ubound(mn_static%nest_ls%geolat_grid,2), i_pe, j_pe
+
+            !if (i_pe .ge. lbound(mn_static%nest_ls%geolat_grid,1) .and. i_pe .le.  ubound(mn_static%nest_ls%geolat_grid,1) .and. j_pe .ge. lbound(mn_static%nest_ls%geolat_grid,2) .and. j_pe .le.  ubound(mn_static%nest_ls%geolat_grid,2) ) then
+              !print '("[INFO] WDR COARSE_SEAICE INSIDE npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+              !print '("[INFO] WDR COARSE_SEAICE npe=",I0," parent latlon ",F8.3,","F8.3," nest latlon ",F8.3,","F8.3)', this_pe, &
+              !    mn_static%parent_ls%geolat_grid(i_parent, j_parent), mn_static%parent_ls%geolon_grid(i_parent, j_parent), &
+              !    mn_static%nest_ls%geolat_grid(i_pe, j_pe), mn_static%nest_ls%geolon_grid(i_pe, j_pe)
+            !endif
+
+
+            !print '("[INFO] WDR COARSE_SEAICE npe=",I0," parent cell ",F8.3,","F8.3," nest cell ",F8.3,","F8.3)', this_pe, &
+            !    mn_static%parent_ls%geolat_grid(i_parent, j_parent), mn_static%parent_ls%geolon_grid(i_parent, j_parent), &
+            !    mn_static%nest_ls%geolat_grid(i_parent, j_parent), mn_static%nest_ls%geolon_grid(i_parent, j_parent)
+          endif
+        endif
+      enddo
+    enddo
+
+    !print '("[INFO] MASK END inside mn_phys_apply_coarse_seaice npe=",I0)', this_pe
+
+  end subroutine mn_phys_apply_coarse_seaice
+
+
+
+
 
   subroutine mn_phys_set_slmsk(Atm, n, mn_static, ioffset, joffset, refine)
     type(fv_atmos_type), intent(inout),allocatable   :: Atm(:)              !< Array of atmospheric data
@@ -154,13 +243,20 @@ contains
     integer, intent(in)                              :: ioffset, joffset    !< Current nest offset in i,j direction
     integer, intent(in)                              :: refine              !< Nest refinement ratio
 
+    integer, parameter :: M_WATER = 0, M_LAND = 1, M_SEAICE = 2
+
     ! For iterating through physics/surface vector data
     integer                 :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, im
     real(kind=kind_phys)    :: phys_oro
+    integer                 :: cell_slmsk
+    integer                 :: this_pe
+
+    this_pe = mpp_pe()
 
     !print '("[INFO] MASK inside mn_phys_reset_sfc_props npe=",I0)', mpp_pe()
     call mn_phys_set_slmsk(Atm, n, mn_static, ioffset, joffset, refine)
 
+    call mn_phys_apply_coarse_seaice(Atm, n, mn_static, ioffset, joffset, refine)
     !  Reset the variables from the fix_sfc files
     im = 0
     do nb = 1,Atm_block%nblks
@@ -175,19 +271,39 @@ contains
         im = im + 1
 
         ! Reset the land sea mask from the hires parent data
-        GFS_Sfcprop%slmsk(im) = mn_static%fp_ls%ls_mask_grid(i_idx, j_idx)
+        !GFS_Sfcprop%slmsk(im) = mn_static%fp_ls%ls_mask_grid(i_idx, j_idx)
+        cell_slmsk = Moving_nest(n)%mn_phys%slmsk(i_pe, j_pe)
+        GFS_Sfcprop%slmsk(im) = cell_slmsk
 
         !  IFD values are 0 for land, and 1 for oceans/lakes -- reverse of the land sea mask
         !  Land Sea Mask has values of 0 for oceans/lakes, 1 for land, 2 for sea ice
         !  TODO figure out what ifd should be for sea ice
-        if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. 1 ) then
+
+        ! ICEFIX
+        ! ccpp/physics/physics/Interstitials/UFS_SCM_NEPTUNE/sfcsub.F
+        !     sli .. land/sea/sea-ice mask. (1/0/2 respectively)
+        ! Seems to be slimsk
+
+        ! Process land-sea-ice mask points
+
+        !if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_LAND ) then  ! Land
+        if (cell_slmsk .eq. M_LAND ) then  ! Land
           if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! Land
           GFS_Sfcprop%oceanfrac(im) = 0   ! Land -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 1    ! Land -- TODO permit fractions
-        else
+          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
+        !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_WATER ) then   ! Ocean
+        else if (cell_slmsk .eq. M_WATER ) then   ! Ocean
           if (move_nsst) GFS_Sfcprop%ifd(im) = 1         ! Ocean
           GFS_Sfcprop%oceanfrac(im) = 1   ! Ocean -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 0    ! Ocean -- TODO permit fractions
+          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
+        !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_SEAICE ) then     ! Sea Ice
+        else if (cell_slmsk .eq. M_SEAICE ) then     ! Sea Ice
+          if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! For Sea ice - ifd is set to Land 0, checked in sfc files
+          GFS_Sfcprop%oceanfrac(im) = 0   ! sea ice -- TODO permit fractions
+          GFS_Sfcprop%landfrac(im) = 0    ! sea ice -- TODO permit fractions
+          GFS_Sfcprop%fice(im) = 1        ! ice fraction over open water grid
         endif
 
         GFS_Sfcprop%tg3(im) = mn_static%fp_fix%deep_soil_temp_grid(i_idx, j_idx)
@@ -499,6 +615,16 @@ contains
             mn_phys%tsnoxy(i,j,k)     = GFS_sfcprop%tsnoxy(im,k)
           enddo
 
+          ! ICEFIX handle tiice
+          do k = 1, GFS_control%kice
+            mn_phys%tiice(i,j,k)    = GFS_sfcprop%tiice(im,k)
+          enddo
+          mn_phys%tisfc(i,j)      = GFS_sfcprop%tisfc(im)
+          mn_phys%sncovr(i,j)     = GFS_sfcprop%sncovr(im)
+
+          mn_phys%fice(i,j)      = GFS_sfcprop%fice(im)
+          mn_phys%hice(i,j)      = GFS_sfcprop%hice(im)
+
           mn_phys%snowd(i,j)      = GFS_sfcprop%snowd(im)
           mn_phys%weasd(i,j)      = GFS_sfcprop%weasd(im)
 
@@ -753,6 +879,21 @@ contains
             if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0) then
               GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0
             endif
+
+            ! ICEFIX handle tiice
+            do k = 1, GFS_control%kice
+              GFS_sfcprop%tiice(im,k) = mn_phys%tiice(i,j,k)
+            enddo
+            if (mn_phys%tisfc(i,j) .lt. 240.0 .or. mn_phys%tisfc(i,j) .gt. 285.0 ) then
+              mn_phys%tisfc(i,j) = 273.15 - 5.0
+            endif
+            GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
+            GFS_sfcprop%sncovr(im) = mn_phys%sncovr(i,j)
+
+            GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
+            GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
+
+
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
@@ -1389,6 +1530,26 @@ contains
           is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsoil, &
           mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_LAND, zsns_default)
 
+
+      ! ICEFIX tiice
+      call fill_nest_halos_from_parent_masked("tiice", mn_phys%tiice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+	  Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, 1, 2, & !! kice
+          mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, mn_phys%ts)
+      call fill_nest_halos_from_parent_masked("tisfc", mn_phys%tisfc, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+          Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, mn_phys%ts)
+      call fill_nest_halos_from_parent_masked("sncovr", mn_phys%sncovr, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+          Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_LAND, 0.0D0)
+
+      call fill_nest_halos_from_parent_masked("fice", mn_phys%fice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+          Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 1.0D0)
+      call fill_nest_halos_from_parent_masked("hice", mn_phys%hice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
+          Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 0.1D0)
+
     endif
 
   end subroutine mn_phys_fill_nest_halos_from_parent
@@ -1517,6 +1678,13 @@ contains
       call mn_var_fill_intern_nest_halos(mn_phys%weasd, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%smoiseq, domain_fine, is_fine_pe)
       call mn_var_fill_intern_nest_halos(mn_phys%zsnsoxy, domain_fine, is_fine_pe)
+
+      call mn_var_fill_intern_nest_halos(mn_phys%tiice, domain_fine, is_fine_pe)
+      call mn_var_fill_intern_nest_halos(mn_phys%tisfc, domain_fine, is_fine_pe)
+      call mn_var_fill_intern_nest_halos(mn_phys%sncovr, domain_fine, is_fine_pe)
+
+      call mn_var_fill_intern_nest_halos(mn_phys%fice, domain_fine, is_fine_pe)
+      call mn_var_fill_intern_nest_halos(mn_phys%hice, domain_fine, is_fine_pe)
 
     endif
 
@@ -1758,6 +1926,18 @@ contains
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
       call mn_var_shift_data(mn_phys%zsnsoxy, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
           delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, GFS_control%lsnow_lsm_lbound, GFS_control%lsoil)
+
+      ! ICEFIX
+      call mn_var_shift_data(mn_phys%tiice, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position, 1, GFS_control%kice)
+      call mn_var_shift_data(mn_phys%tisfc, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
+      call mn_var_shift_data(mn_phys%sncovr, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
+      call mn_var_shift_data(mn_phys%fice, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
+      call mn_var_shift_data(mn_phys%hice, interp_type, wt_h, Atm(child_grid_num)%neststruct%ind_h, &
+          delta_i_c, delta_j_c, x_refine, y_refine, is_fine_pe, nest_domain, position)
 
     endif
 
