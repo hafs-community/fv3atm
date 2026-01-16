@@ -6078,6 +6078,13 @@
   type = real
   kind = kind_phys
   intent = in
+[scale_fac_opt]
+  standard_name = control_for_scale_awareness_options_in_Tiedtke
+  long_name = control for scale awareness options in the Tiedtke scheme
+  units = none
+  dimensions = ()
+  type = integer
+  intent = in
 [clam_shal]
   standard_name = entrainment_rate_coefficient_for_shallow_convection
   long_name = entrainment rate coefficient for shallow convection
