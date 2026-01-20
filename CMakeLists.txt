@@ -149,6 +149,7 @@ if (FV3)
       fv3/moving_nest/fv_moving_nest.F90
       fv3/moving_nest/fv_moving_nest_main.F90
       fv3/moving_nest/fv_moving_nest_physics.F90
+      fv3/moving_nest/fv_moving_nest_tiled_read.F90
       fv3/moving_nest/fv_moving_nest_types.F90
       fv3/moving_nest/fv_moving_nest_utils.F90
       )

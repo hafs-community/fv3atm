@@ -31,12 +31,6 @@ module bounding_box_mod
   use mpp_mod,         only : mpp_pe
   use fv_arrays_mod,   only : R_GRID
 
-#ifdef GFS_TYPES
-  use GFS_typedefs,      only : kind_phys
-#else
-  use IPD_typedefs,      only : kind_phys => IPD_kind_phys
-#endif
-
   ! Simple aggregation of the start and end indices of a 2D grid
   ! Makes argument lists clearer to read
   type bbox
@@ -120,13 +114,15 @@ contains
 
   !>@brief This subroutine returns the nest grid indices that correspond to the input nest domain, direction, and position
   !>@details  Simplifies the call signature with the bbox type rather than 4 separate integers
-  subroutine bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
+  subroutine bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction, position, nest_level)
     implicit none
     type(nest_domain_type), intent(in)     :: nest_domain
     type(bbox), intent(out)                :: bbox_fine, bbox_coarse
-    integer, intent(in)                    :: direction, position
+    integer, intent(in)                    :: direction, position, nest_level
 
-    integer        :: nest_level = 1   ! TODO allow to vary
+
+
+    if (nest_level .gt. 1) print '("[ERROR] WDR bbox npe=",I0," nest_level=",I0)', mpp_pe(), nest_level
 
     call mpp_get_C2F_index(nest_domain, bbox_fine%is, bbox_fine%ie, bbox_fine%js, bbox_fine%je, &
         bbox_coarse%is, bbox_coarse%ie, bbox_coarse%js, bbox_coarse%je, direction,  nest_level, position=position)
