@@ -134,6 +134,7 @@ public get_atmos_model_ungridded_dim
 public atmos_model_get_nth_domain_info
 public addLsmask2grid
 public setup_exportdata
+public setup_inlinedata
 public set_fhzero_loop, InitTimeFromIAUOffset
 public get_atmos_tracer_types
 !-----------------------------------------------------------------------
@@ -978,6 +979,7 @@ subroutine update_atmos_model_state (Atmos, rc)
 !--- local variables
   integer :: i, localrc, sec_lastfhzerofh
   integer :: isec, seconds, isec_fhzero
+  integer :: dtatm_temp
   logical :: tmpflag_fhzero
   real(kind=GFS_kind_phys) :: time_int, time_intfull
 !
@@ -1012,9 +1014,10 @@ subroutine update_atmos_model_state (Atmos, rc)
       if (mpp_pe() == mpp_root_pe()) write(6,*) 'gfs diags time since last bucket empty: ',time_int,' time_intfull=', &
          time_intfull,' kdt=',GFS_control%kdt
       call atmosphere_nggps_diag(Atmos%Time)
+      call get_time ( Atmos%Time_step, dtatm_temp)
       call fv3atm_diag_output(Atmos%Time, GFS_Diag, Atm_block, GFS_control%nx, GFS_control%ny, &
                             GFS_control%levs, 1, 1, 1.0_GFS_kind_phys, time_int, time_intfull, &
-                            GFS_control%fhswr, GFS_control%fhlwr, GFS_control)
+                            GFS_control%fhswr, GFS_control%fhlwr, GFS_control, dtatm_temp)
     endif
 
     !---  find current fhzero
@@ -2029,17 +2032,13 @@ end subroutine update_atmos_chemistry
                   nb = Atm_block%blkno(i,j)
                   ix = Atm_block%ixp(i,j)
                   im = GFS_control%chunk_begin(nb)+ix-1
-!                 if (GFS_Sfcprop%oceanfrac(im) > zero .and.  datar8(i,j) > zorlmin) then
-                  if (GFS_Sfcprop%oceanfrac(im) > zero) then
-                    if (mergeflg(i,j)) datar8(i,j)=GFS_Sfcprop%zorlw(im) ! use initial value
-                    if (datar8(i,j) > zorlmin) then
-                      tem = 100.0_GFS_kind_phys * min(0.1_GFS_kind_phys, datar8(i,j))
-!                     GFS_Coupling%zorlwav_cpl(im) = tem
-                      GFS_Sfcprop%zorlwav(im)      = tem
-                      GFS_Sfcprop%zorlw(im)        = tem
-                    else
-                      GFS_Sfcprop%zorlwav(im) = -999.0_GFS_kind_phys
-                    endif
+                  if (GFS_Sfcprop%oceanfrac(im) > zero .and.  datar8(i,j) > zorlmin) then
+                    tem = 100.0_GFS_kind_phys * min(0.1_GFS_kind_phys, datar8(i,j))
+!                   GFS_Coupling%zorlwav_cpl(im) = tem
+                    GFS_Sfcprop%zorlwav(im)      = tem
+                    GFS_Sfcprop%zorlw(im)        = tem
+                  else
+                    GFS_Sfcprop%zorlwav(im) = -999.0_GFS_kind_phys
                   endif
                 enddo
               enddo
@@ -3328,7 +3327,83 @@ end subroutine update_atmos_chemistry
     rc=0
 !
   end subroutine assign_importdata
+!
+  subroutine setup_inlinedata(fieldName, datar82d, logunit)
 
+    use ESMF, only: ESMF_KIND_R8
+
+    !--- arguments
+    character(len=*), intent(in) :: fieldName
+    real(kind=ESMF_KIND_R8), dimension(:,:), target, intent(in) :: datar82d
+    integer, intent(in) :: logunit
+
+    !--- local variables
+    integer :: i, j, ix, nb, im
+    integer :: isc, iec, jsc, jec
+
+! set up local dimension
+    isc = GFS_control%isc
+    iec = GFS_control%isc+GFS_control%nx-1
+    jsc = GFS_control%jsc
+    jec = GFS_control%jsc+GFS_control%ny-1
+
+! fill variables
+    select case(trim(fieldName))
+       case ('Si_ifrac')
+!$omp parallel do default(shared) private(i,j,nb,ix,im)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = Atm_block%blkno(i,j)
+                ix = Atm_block%ixp(i,j)
+                im = GFS_control%chunk_begin(nb)+ix-1
+                GFS_Coupling%fice_dat(im) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('Si_thick')
+!$omp parallel do default(shared) private(i,j,nb,ix,im)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = Atm_block%blkno(i,j)
+                ix = Atm_block%ixp(i,j)
+                im = GFS_control%chunk_begin(nb)+ix-1
+                GFS_Coupling%hice_dat(im) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('So_omask')
+!$omp parallel do default(shared) private(i,j,nb,ix,im)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = Atm_block%blkno(i,j)
+                ix = Atm_block%ixp(i,j)
+                im = GFS_control%chunk_begin(nb)+ix-1
+                GFS_Coupling%mask_dat(im) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('So_t')
+!$omp parallel do default(shared) private(i,j,nb,ix,im)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = Atm_block%blkno(i,j)
+                ix = Atm_block%ixp(i,j)
+                im = GFS_control%chunk_begin(nb)+ix-1
+                GFS_Coupling%tsfco_dat(im) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('Si_t')
+!$omp parallel do default(shared) private(i,j,nb,ix,im)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = Atm_block%blkno(i,j)
+                ix = Atm_block%ixp(i,j)
+                im = GFS_control%chunk_begin(nb)+ix-1
+                GFS_Coupling%tice_dat(im) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case default
+          write(logunit,*) trim(fieldName)//' can not be used by cdeps inline! Skipping field ...'
+    end select
+
+  end subroutine setup_inlinedata
 !
   subroutine setup_exportdata(rc)
 
