@@ -907,7 +907,8 @@ contains
 
     call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "substrate_temperature", "substrate_temperature", static_fix%deep_soil_temp_grid, tile_num)
     ! set any -999s to +4C
-    call mn_replace_low_values(static_fix%deep_soil_temp_grid, -100.0, 277.0)
+    !call mn_replace_low_values(static_fix%deep_soil_temp_grid, -100.0, 277.0)
+    call mn_replace_low_values(static_fix%deep_soil_temp_grid, -100.0, -1.e20)
 
     !! TODO investigate reading high-resolution veg_frac and veg_greenness
     !call mn_static_read_hires(npx, npy, refine, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "", mn_static%veg_frac_grid)

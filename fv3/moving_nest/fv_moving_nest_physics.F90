@@ -284,13 +284,15 @@ contains
           if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! Land
           GFS_Sfcprop%oceanfrac(im) = 0   ! Land -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 1    ! Land -- TODO permit fractions
-          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
+          GFS_Sfcprop%fice(im) = 0
+          GFS_Sfcprop%hice(im) = 0
         !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_WATER ) then   ! Ocean
         else if (cell_slmsk .eq. M_WATER ) then   ! Ocean
           if (move_nsst) GFS_Sfcprop%ifd(im) = 1         ! Ocean
           GFS_Sfcprop%oceanfrac(im) = 1   ! Ocean -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 0    ! Ocean -- TODO permit fractions
-          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
+          GFS_Sfcprop%fice(im) = 0
+          GFS_Sfcprop%hice(im) = 0
         !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_SEAICE ) then     ! Sea Ice
         else if (cell_slmsk .eq. M_SEAICE ) then     ! Sea Ice
           if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! For Sea ice - ifd is set to Land 0, checked in sfc files
@@ -651,7 +653,7 @@ contains
     real(kind=kind_phys) :: dzs(1:4)           !local for Noah MP
     real(kind=kind_phys) :: dzsno(-2:0)        !local for Noah MP
     real(kind=kind_phys) :: dzsnso(-2:4)       !local for Noah MP
-    real(kind=kind_phys) :: porosity(1:19)     !local for Noah MP
+    real(kind=kind_phys) :: porosity(0:19)     !local for Noah MP, add fake porosity for stype 0
     real(kind=kind_phys) :: zsns_default(-2:4) !local for Noah MP
     type(fv_moving_nest_physics_type), pointer       :: mn_phys
 
@@ -660,7 +662,7 @@ contains
     dzs      = (/0.1,0.3,0.6,1.0/)             ! 4 layer soil thickness
     dzsno    = (/0.0,0.0,0.0/)                 ! 3 snow layer thichness
     dzsnso   = (/0.0,0.0,0.0,0.1,0.3,0.6,1.0/) ! dzs + dzsno
-    porosity = (/0.339,0.421,0.434,0.476,0.484,0.439,0.404,0.464, &
+    porosity = (/1.000,0.339,0.421,0.434,0.476,0.484,0.439,0.404,0.464, &
                  0.465,0.406,0.468,0.468,0.439,1.000,0.200,0.421, &
                  0.468,0.200,0.339/)
     zsns_default = (/0.0, 0.0, 0.0,  -0.1,-0.4,-1.0,-2.0 /) !depths from snow surface
@@ -882,12 +884,20 @@ contains
             GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
             GFS_sfcprop%sncovr(im) = mn_phys%sncovr(i,j)
 
-            GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
-            GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
+            if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 2) ) then
+              GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
+              GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
+            else
+              GFS_sfcprop%fice(im) = 0.
+              GFS_sfcprop%hice(im) = 0.
+            endif
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
             enddo
+
+            ! Reset over land only
+            if (nint(GFS_sfcprop%slmsk(im)) .eq. 1) then
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
@@ -990,10 +1000,12 @@ contains
                 enddo
               endif
             endif
+
+            endif ! Reset over land only
           endif
 
           ! Check if stype and vtype are properly set for land points. Set to reasonable values if they have fill values.
-          if ( (int(GFS_sfcprop%slmsk(im)) .eq. 1) ) then
+          if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 1) ) then
             if (GFS_sfcprop%vtype(im) .lt. 0.5) then
               GFS_sfcprop%vtype(im) = 7    ! Force to grassland
             endif
@@ -1526,10 +1538,10 @@ contains
 
       call fill_nest_halos_from_parent_masked("fice", mn_phys%fice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 1.0D0)
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 0.0D0)
       call fill_nest_halos_from_parent_masked("hice", mn_phys%hice, interp_type_lmask, Atm(child_grid_num)%neststruct%wt_h, &
           Atm(child_grid_num)%neststruct%ind_h, x_refine, y_refine, &
-          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 0.1D0)
+          is_fine_pe, nest_domain, position, mn_phys%slmsk, mn_static%parent_ls%ls_mask_grid, M_SEAICE, 0.0D0)
 
     endif
 
