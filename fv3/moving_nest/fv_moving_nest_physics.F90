@@ -800,6 +800,15 @@ contains
               GFS_sfcprop%albdifnir_lnd (im)   = 0.5
             endif
 
+            ! Sea-ice related variables
+            if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 2) ) then
+              GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
+              GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
+            else
+              GFS_sfcprop%fice(im) = 0.
+              GFS_sfcprop%hice(im) = 0.
+            endif
+
             ! Cloud properties
             GFS_cldprop%cv(im) = mn_phys%cv(i,j)
             GFS_cldprop%cvt(im) = mn_phys%cvt(i,j)
@@ -883,14 +892,6 @@ contains
             endif
             GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
             GFS_sfcprop%sncovr(im) = mn_phys%sncovr(i,j)
-
-            if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 2) ) then
-              GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
-              GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
-            else
-              GFS_sfcprop%fice(im) = 0.
-              GFS_sfcprop%hice(im) = 0.
-            endif
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
