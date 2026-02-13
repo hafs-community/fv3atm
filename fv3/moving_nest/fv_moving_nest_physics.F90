@@ -857,15 +857,9 @@ contains
           if (GFS_control%lsm == GFS_control%lsm_noahmp) then
 
             GFS_sfcprop%scolor(im)     = mn_phys%soilcolor(i,j)
-            GFS_sfcprop%tvxy(im)       = mn_phys%tvxy(i,j)
             GFS_sfcprop%tgxy(im)       = mn_phys%tgxy(i,j)
-            GFS_sfcprop%canicexy(im)   = mn_phys%canicexy(i,j)
-            GFS_sfcprop%canliqxy(im)   = mn_phys%canliqxy(i,j)
-            GFS_sfcprop%eahxy(im)      = mn_phys%eahxy(i,j)
-            GFS_sfcprop%tahxy(im)      = mn_phys%tahxy(i,j)
             GFS_sfcprop%cmxy(im)       = mn_phys%cmxy(i,j)
             GFS_sfcprop%chxy(im)       = mn_phys%chxy(i,j)
-            GFS_sfcprop%fwetxy(im)     = mn_phys%fwetxy(i,j)
             GFS_sfcprop%sneqvoxy(im)   = mn_phys%sneqvoxy(i,j)
             GFS_sfcprop%alboldxy(im)   = mn_phys%alboldxy(i,j)
             GFS_sfcprop%qsnowxy(im)    = mn_phys%qsnowxy(i,j)
@@ -888,6 +882,24 @@ contains
             GFS_sfcprop%snowd(im)      = mn_phys%snowd(i,j)
             GFS_sfcprop%weasd(im)      = mn_phys%weasd(i,j)
             GFS_sfcprop%sncovr(im)     = mn_phys%sncovr(i,j)
+
+            ! Vegetation variables: perform some bounds checks in case nest vegetated grids inherit from non-veg parent
+
+            if (mn_phys%leading_edge(i,j) ) then
+              GFS_sfcprop%tvxy(im)     = min(max(mn_phys%tvxy(i,j) ,mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
+              GFS_sfcprop%tahxy(im)    = min(max(mn_phys%tahxy(i,j),mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
+              GFS_sfcprop%fwetxy(im)   = min(max(mn_phys%fwetxy(i,j),0.0),1.0)
+              GFS_sfcprop%canicexy(im) = min(max(mn_phys%canicexy(i,j),0.0),100.0)
+              GFS_sfcprop%canliqxy(im) = min(max(mn_phys%canliqxy(i,j),0.0),100.0)
+              GFS_sfcprop%eahxy(im)    = min(max(mn_phys%eahxy(i,j),500.0),4000.0)
+            else
+              GFS_sfcprop%tvxy(im)     = mn_phys%tvxy(i,j)
+              GFS_sfcprop%tahxy(im)    = mn_phys%tahxy(i,j)
+              GFS_sfcprop%fwetxy(im)   = mn_phys%fwetxy(i,j)
+              GFS_sfcprop%canicexy(im) = mn_phys%canicexy(i,j)
+              GFS_sfcprop%canliqxy(im) = mn_phys%canliqxy(i,j)
+              GFS_sfcprop%eahxy(im)    = mn_phys%eahxy(i,j)
+            endif
 
             if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0) then
               GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0
