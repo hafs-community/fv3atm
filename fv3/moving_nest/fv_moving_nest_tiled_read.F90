@@ -133,12 +133,10 @@ contains
     integer            :: this_pe
 
     this_pe = mpp_pe()
-    
-    print '("[INFO] WDR static_filename npe=",I0," tile_num=",I0," tag=",A," refine=",I0)', this_pe, tile_num, tag, refine
 
     write(parent_str, '(I0)'), tile_num
 
-    if (refine .eq. 1 .and. (tag .eq. 'grid' .or. tag .eq. 'oro_data')) then
+    if (refine .eq. 1 .and. (trim(tag) .eq. 'grid' .or. trim(tag) .eq. 'oro_data')) then
       ! For 1x files in INPUT directory; go at the symbolic link
       grid_filename = trim(trim(surface_dir) // '/' // trim(tag) // '.tile' // trim(parent_str) // '.nc')
     else
@@ -158,9 +156,6 @@ contains
       print '("[ERROR] WDR mn_static_filename DOES NOT EXIST npe=",I0," tile_num=",I0," tag=",A16," refine=",I0," grid_filename=",A120)', this_pe, tile_num, tag, refine, grid_filename
       print '("[ERROR] WDR mn_static_filename DNE npe=",I0," grid_filename=",A120)', this_pe, grid_filename
     endif
-
-    print '("[INFO] WDR RETURN static_filename npe=",I0," tile_num=",I0," tag=",A," refine=",I0," grid_filename=",A)', this_pe, tile_num, tag, refine, grid_filename
-
 
   end subroutine mn_static_filename
 
@@ -548,39 +543,43 @@ contains
     tile_ioffset = st%tile_ioffset
     tile_joffset = st%tile_joffset
 
-    print '("[INFO] WDR TC1 check_update_static_tile_data npe=",I0)', this_pe
+    !print '("[INFO] WDR TC1 check_update_static_tile_data npe=",I0)', this_pe
 
-    print '("[INFO] WDR check_update_static_tile_data npe=",I0," tile_nx=",I0," tile_ny=",I0," tile_ioffset=",I0," tile_joffset=",I0," first_call=",L1)',this_pe, tile_nx, tile_ny, tile_ioffset, tile_joffset, first_call
+    !print '("[INFO] WDR check_update_static_tile_data npe=",I0," tile_nx=",I0," tile_ny=",I0," tile_ioffset=",I0," tile_joffset=",I0," first_call=",L1)',this_pe, tile_nx, tile_ny, tile_ioffset, tile_joffset, first_call
 
     call trigger_reread_static_data(fp_nx, fp_ny, nest_nx, nest_ny, tile_nx, tile_ny, ioffset, joffset, tile_ioffset, tile_joffset, refine, halo, first_call, allow_early_read, do_read, new_tile_ioffset, new_tile_joffset)
     if (first_call) first_call=.False.
 
-    print '("[INFO] WDR check_update_static_tile_data npe=",I0," do_read=",L1)', this_pe, do_read
-    print '("[INFO] WDR TC2 check_update_static_tile_data npe=",I0)', this_pe
+    !print '("[INFO] WDR check_update_static_tile_data npe=",I0," do_read=",L1)', this_pe, do_read
+    !print '("[INFO] WDR TC2 check_update_static_tile_data npe=",I0)', this_pe
 
     if (do_read) then
-      print '("[INFO] WDR TC3 check_update_static_tile_data npe=",I0,L1,L1,L1,L1)', this_pe, allocated(st%fp_fix%deep_soil_temp_grid), allocated(st%fp_fix%slope_type_grid), allocated(st%fp_ls%soil_type_grid), allocated(st%nest_fix%deep_soil_temp_grid)
-      print '("[INFO] WDR TILE READ check_update_static_tile_data npe=",I0," a_step=",I0," tile_nx=",I0," tile_ny=",I0," new_tile_ioffset=",I0," new_tile_joffset=",I0)',this_pe, a_step, tile_nx, tile_ny, new_tile_ioffset, new_tile_joffset
+      !print '("[INFO] WDR TC3 check_update_static_tile_data npe=",I0,L1,L1,L1,L1)', this_pe, allocated(st%fp_fix%deep_soil_temp_grid), allocated(st%fp_fix%slope_type_grid), allocated(st%fp_ls%soil_type_grid), allocated(st%nest_fix%deep_soil_temp_grid)
+      !print '("[INFO] WDR TILE READ check_update_static_tile_data npe=",I0," a_step=",I0," tile_nx=",I0," tile_ny=",I0," new_tile_ioffset=",I0," new_tile_joffset=",I0)',this_pe, a_step, tile_nx, tile_ny, new_tile_ioffset, new_tile_joffset
       if (use_timers) call mpp_clock_begin (id_movnest_readstatic)
 
-      print '("[INFO] WDR TILE READ check npe=",I0," trim(surface_dir)=",A120)', this_pe, trim(surface_dir)
-      print '("[INFO] WDR TILE READ check npe=",I0," surface_dir=",A120)', this_pe, surface_dir
+      !print '("[INFO] WDR TILE READ check npe=",I0," trim(surface_dir)=",A120)', this_pe, trim(surface_dir)
+      !print '("[INFO] WDR TILE READ check npe=",I0," surface_dir=",A120)', this_pe, surface_dir
+      !print '("[INFO] WDR TILE READ check npe=",I0," alloc deep_soil=",L1)', this_pe, allocated(st%fp_fix%deep_soil_temp_grid)
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "substrate_temperature", "substrate_temperature", st%fp_fix%deep_soil_temp_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
       ! set any -999s to +4C
       call mn_replace_low_values(st%fp_fix%deep_soil_temp_grid, -100.0, 277.0)
 
-      print '("[INFO] WDR TC4 check_update_static_tile_data npe=",I0)', this_pe
+      !print '("[INFO] WDR TC4 check_update_static_tile_data npe=",I0)', this_pe
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "substrate_temperature", "geolat", st%fp_fix%deep_lat, num_bytes, parent_tile)
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "substrate_temperature", "geolon", st%fp_fix%deep_lon, num_bytes, parent_tile)
 
-      print '("[INFO] WDR TC5 check_update_static_tile_data npe=",I0)', this_pe
+      !print '("[INFO] WDR TC5 check_update_static_tile_data npe=",I0)', this_pe
 
+!      call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "soil_type", "soil_type", st%fp_ls%soil_type_grid, num_bytes, parent_tile)
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "soil_type", "soil_type", st%fp_ls%soil_type_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
+      !print '("[INFO] WDR TC5.1 check_update_static_tile_data npe=",I0)', this_pe
       ! To match initialization behavior, set any -999s to 0 in soil_type
       call mn_replace_low_values(st%fp_ls%soil_type_grid, -100.0, 0.0)
+      !print '("[INFO] WDR TC5.2 check_update_static_tile_data npe=",I0)', this_pe
 
 
       !! TODO investigate reading high-resolution veg_frac and veg_greenness
@@ -588,22 +587,23 @@ contains
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "vegetation_type", "vegetation_type", st%fp_fix%veg_type_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
+
       ! To match initialization behavior, set any -999s to 0 in veg_type
       call mn_replace_low_values(st%fp_fix%veg_type_grid, -100.0, 0.0)
 
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "slope_type", "slope_type", st%fp_fix%slope_type_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
+
       ! To match initialization behavior, set any -999s to 0 in slope_type
       call mn_replace_low_values(st%fp_fix%slope_type_grid, -100.0, 0.0)
 
 
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "maximum_snow_albedo", "maximum_snow_albedo", st%fp_fix%max_snow_alb_grid, num_bytes, parent_tile)
       total_bytes = total_bytes + num_bytes
+
       ! Set any -999s to 0.5
       call mn_replace_low_values(st%fp_fix%max_snow_alb_grid, -100.0, 0.5)
-
-      print '("[INFO] WDR TC6 check_update_static_tile_data npe=",I0)', this_pe
 
       ! Albedo fraction -- read and calculate
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "facsf", "facsf", st%fp_fix%facsf_grid, num_bytes, parent_tile)
@@ -636,13 +636,15 @@ contains
       ! alnsf = near IR strong cosz = near_IR_black_sky_albedo
       ! alnwf = near IR weak cosz = near_IR_white_sky_albedo
 
-
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "snowfree_albedo", "visible_black_sky_albedo", st%fp_fix%alvsf_grid, num_bytes, parent_tile, time=month)
       total_bytes = total_bytes + num_bytes
+
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "snowfree_albedo", "visible_white_sky_albedo", st%fp_fix%alvwf_grid, num_bytes, parent_tile, time=month)
       total_bytes = total_bytes + num_bytes
+
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "snowfree_albedo", "near_IR_black_sky_albedo", st%fp_fix%alnsf_grid, num_bytes, parent_tile, time=month)
       total_bytes = total_bytes + num_bytes
+
       call mn_static_read_tiled_hires_r4(new_tile_ioffset, new_tile_joffset, tile_nx, tile_ny, refine, pelist, surface_dir, "snowfree_albedo", "near_IR_white_sky_albedo", st%fp_fix%alnwf_grid, num_bytes, parent_tile, time=month)
       total_bytes = total_bytes + num_bytes
 
@@ -663,13 +665,11 @@ contains
       print '("[INFO] WDR check_update_static_tile_data READ ",I0," COMPLETE npe=",I0," complete bytes=",I0," MB=",F10.3)', st%num_reads, this_pe, total_bytes, total_bytes/1024.0/1024.0
 
       if (use_timers) call mpp_clock_end (id_movnest_readstatic)
-      print '("[INFO] WDR TC8 check_update_static_tile_data npe=",I0)', this_pe
 
     endif
 
 !    print '("[INFO] WDR TILE A4a check_update_static_tile_data npe=",I0," allocated(st%deep_soil_temp_grid)=",L1," allocated(child_moving_nest%mn_static%deep_soil_temp_grid)=",L1)', this_pe, allocated(st%deep_soil_temp_grid), allocated(child_moving_nest%mn_static%deep_soil_temp_grid)
 !    print '("[INFO] WDR TILE A4a check_update_static_tile_data npe=",I0," allocated(st%deep_soil_temp_grid)=",L1)', this_pe, allocated(st%deep_soil_temp_grid)
-    print '("[INFO] WDR TC9 check_update_static_tile_data npe=",I0)', this_pe
 
   end subroutine check_update_static_tile_data
 
@@ -697,30 +697,28 @@ contains
 
     this_pe = mpp_pe()
 
-    print '("[INFO] WDR SRT0 npe=",I0)', this_pe
+    !call mpp_sync(pelist)
+!    if (present(time)) then
+!      print '("[INFO] WDR SRT0.1 npe=",I0," time PRESENT time=",I0, " var_name=",A)', this_pe, time, var_name
+!    else
+!      print '("[INFO] WDR SRT0.1 npe=",I0," time NOT PRESENT var_name=",A)', this_pe, var_name
+!    endif
+
 
     if (allocated(data_grid)) then
-      print '("[INFO] WDR mn_static_read_tiled_hires_r4 npe=",I0," start ",A24," with bounds ",I0,"-",I0,",",I0,"-",I0)', this_pe, var_name, lbound(data_grid,1) , ubound(data_grid,1) , lbound(data_grid,2) , ubound(data_grid,2)
+      !print '("[INFO] WDR mn_static_read_tiled_hires_r4 npe=",I0," start ",A24," with bounds ",I0,"-",I0,",",I0,"-",I0)', this_pe, var_name, lbound(data_grid,1) , ubound(data_grid,1) , lbound(data_grid,2) , ubound(data_grid,2)
       deallocate(data_grid)
     !else
     !  print '("[INFO] WDR mn_static_read_tiled_hires_r4 npe=",I0," start ",A24," unallocated.")', this_pe, var_name
     endif
 
-    print '("[INFO] WDR SRT1 npe=",I0)', this_pe
-    
     call mn_static_filename(surface_dir, parent_tile, file_prefix, refine, nc_filename)
-    print '("[INFO] WDR call mn_static_filename R1 npe=",I0," nc_filename=",A)', mpp_pe(), nc_filename
-    print '("[INFO] WDR SRT2 npe=",I0)', this_pe
 
     if (present(time)) then
-    print '("[INFO] WDR SRT3 npe=",I0)', this_pe
       call alloc_read_tiled_data(nc_filename, var_name, tile_ioffset, tile_joffset, x_size, y_size, data_grid, pelist, time)
     else
-    print '("[INFO] WDR SRT4 npe=",I0)', this_pe
       call alloc_read_tiled_data(nc_filename, var_name, tile_ioffset, tile_joffset, x_size, y_size, data_grid, pelist)
     endif
-
-    print '("[INFO] WDR SRT5 npe=",I0)', this_pe
 
     num_bytes = sizeof(data_grid)
 
@@ -798,8 +796,6 @@ contains
     this_pe = mpp_pe()
     dim_sizes = -1
 
-    !print '("[INFO] WDR alloc_read_tiled_data_r4_2d AA npe=",I0," nc_filename=",A80)', this_pe, nc_filename
-
     corner(1) = tile_ioffset
     corner(2) = tile_joffset
     corner(3) = 0
@@ -817,18 +813,12 @@ contains
     allocate(data_array(tile_ioffset:tile_ioffset+x_size-1, tile_joffset:tile_joffset+y_size-1))
     data_array = -9999.9
 
-
-    !print '("[INFO] WDR alloc_read_tiled_data_r4_2d BB npe=",I0," DIMSIZE alloc ",A32,"(",I0,"-",I0,",",I0,"-",I0,")")', this_pe, var_name, tile_ioffset, tile_ioffset+x_size-1, tile_joffset, tile_joffset+y_size-1
-
     if (present(time)) then
-      !print '("[INFO] WDR alloc_read_tiled_data_r4_2d CCTIME npe=",I0)', this_pe
-
       corner(3) = time
       edge_lengths(3) = 1
 
       !allocate(time_array(x_size, y_size, 12)) ! assume monthly data; allocate 12 slots
       allocate(time_array(time:time,tile_ioffset:tile_ioffset+x_size-1, tile_joffset:tile_joffset+y_size-1))
-      !print '("[INFO] WDR alloc_read_tiled_data_r4_2d time_array DIMSIZES npe=",I0," ",A32,"(",I0,",",I0,",",I0,")")', this_pe, var_name, size(time_array,1), size(time_array,2), size(time_array,3)
       time_array = 0.00001
 
       if (open_file(fileobj, nc_filename, "read", pelist=pes, is_restart=.false.)) then
@@ -839,30 +829,23 @@ contains
         !print '("[INFO] WDR alloc_read_tiled_data_r4_2d DIMSIZES npe=",I0," ",A32,"(",I0,",",I0,",",I0,")")', this_pe, var_name, dim_sizes(1), dim_sizes(2), dim_sizes(3)
 
         call read_data(fileobj, var_name, time_array, corner=corner, edge_lengths=edge_lengths)
-        !print '("[INFO] WDR alloc_read_tiled_data_r4_2d EETIME npe=",I0)', this_pe
         call close_file(fileobj)
-        !print '("[INFO] WDR alloc_read_tiled_data_r4_2d FFTIME npe=",I0)', this_pe
       endif
 
       data_array = time_array(time,:,:)
       deallocate(time_array)
     else
-      !print '("[INFO] WDR alloc_read_tiled_data_r4_2d CCNOTIME npe=",I0)', this_pe
       ! Following transition documents at https://github.com/NOAA-GFDL/FMS/tree/2021.03.01/fms2_io
       if (open_file(fileobj, nc_filename, "read", pelist=pes, is_restart=.false.)) then
-        !print '("[INFO] WDR alloc_read_tiled_data_r4_2d DDNOTIME npe=",I0)', this_pe
         !num_dims = get_variable_num_dimensions(fileobj, var_name)
         !call get_variable_size(fileobj, var_name, dim_sizes(1:num_dims))
         !print '("[INFO] WDR alloc_read_tiled_data_r4_2d DIMSIZES npe=",I0," ",A32,"(",I0,",",I0,",",I0,")")', this_pe, var_name, dim_sizes(1), dim_sizes(2), dim_sizes(3)
 
         call read_data(fileobj, var_name, data_array, corner=corner(1:2), edge_lengths=edge_lengths(1:2))
-        !print '("[INFO] WDR alloc_read_tiled_data_r4_2d EENOTIME npe=",I0)', this_pe
         call close_file(fileobj)
-        !print '("[INFO] WDR alloc_read_tiled_data_r4_2d FFNOTIME npe=",I0)', this_pe
       endif
     endif
 
-    !print '("[INFO] WDR alloc_read_tiled_data_r4_2d ZZ npe=",I0)', this_pe
     !data_array(:,:) = local_data_array(1,:,:)
     !print '("[INFO] WDR alloc_read_tiled_data_r4_2d ZZ npe=",I0)', this_pe
 
@@ -891,8 +874,6 @@ contains
     ! Could later extend this function to determine data size based on netCDF file metadata
 
     this_pe = mpp_pe()
-
-    !print '("[INFO] WDR alloc_read_tiled_data_r8_2d AA npe=",I0," nc_filename=",A80)', this_pe, nc_filename
 
     corner(1) = tile_ioffset
     corner(2) = tile_joffset

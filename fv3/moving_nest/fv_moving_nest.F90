@@ -238,6 +238,9 @@ contains
     integer  :: x_refine, y_refine
     type(fv_moving_nest_prog_type), pointer :: mn_prog
     integer :: child_grid_idx
+    integer :: this_pe
+
+    this_pe = mpp_pe()
 
     mn_prog => Moving_nest(n)%mn_prog
 
@@ -280,6 +283,7 @@ contains
 
     call fill_nest_halos_from_parent("q", Atm(n)%q, interp_type, Atm(child_grid_idx)%neststruct%wt_h, &
         Atm(child_grid_idx)%neststruct%ind_h, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, nz)
+
 
     ! Interpolate terrain from coarse grid
     if (Moving_nest(n)%mn_flag%terrain_smoother .eq. 4) then
@@ -378,7 +382,7 @@ contains
     type(fv_moving_nest_prog_type), pointer :: mn_prog
 
 
-    mn_prog => Moving_nest(child_grid_num)%mn_prog 
+    mn_prog => Moving_nest(child_grid_num)%mn_prog
     this_pe = mpp_pe()
 
     call mn_var_fill_intern_nest_halos(Atm%q_con, domain_fine, is_fine_pe)
@@ -590,7 +594,7 @@ contains
     real(kind=R_GRID), allocatable, intent(out)  :: n_grid_v(:,:,:)                               !< v-wind staggered lat/lon grids
     real(kind=R_GRID), allocatable, intent(out)  :: n_grid_b(:,:,:)                               !< corner staggered lat/lon grids
 
-    character(len=256) :: grid_filename
+    character(len=512) :: grid_filename
     integer :: x, y, fp_i, fp_j
     integer :: position, position_u, position_v, position_b
     integer :: x_refine, y_refine
@@ -635,8 +639,6 @@ contains
 
       parent_geo%nx = parent_geo%nxp - 1
       parent_geo%ny = parent_geo%nyp - 1
-
-      print '("[INFO] WDR call mn_static_filename S3 npe=",I0)', mpp_pe()
 
       call mn_static_filename(surface_dir, parent_tile, 'grid', 1, grid_filename)
       call load_nest_latlons_from_nc(grid_filename, parent_geo%nxp, parent_geo%nyp, 1, pelist, parent_geo)
@@ -796,16 +798,13 @@ contains
     character(len=*), intent(in)       :: surface_dir          !< Surface directory to read netCDF file from
     integer, intent(in)                :: parent_tile          !< Parent tile number
 
-    character(len=256)                 :: grid_filename
+    character(len=512)                 :: grid_filename
 
     integer :: i, j
-
-    print '("[INFO] WDR call mn_static_filename S4 npe=",I0)', mpp_pe()
 
     call mn_static_filename(surface_dir, parent_tile, 'grid',  refine, grid_filename)
 
     call load_nest_latlons_from_nc(trim(grid_filename), npx, npy, refine, pelist, fp_super_tile_geo)
-
 
   end subroutine mn_latlon_read_hires_parent
 
@@ -887,9 +886,7 @@ contains
     integer :: this_pe
 
     this_pe = mpp_pe()
-    
-    print '("[INFO] WDR MAA mn_static_read_ls npe=",I0," tile_num=",I0)', this_pe, tile_num
-    
+
     ! If terrain_smoother method 1 is chosen, we need the parent coarse terrain
     if (terrain_smoother .eq. 1) then
       if (filtered_terrain) then
@@ -899,18 +896,19 @@ contains
       endif
     endif
 
-    print '("[INFO] WDR MCC mn_static_read_ls npe=",I0," tile_num=",I0)', this_pe, tile_num
-
     ! Read in coarse resolution land sea mask to use for masked interpolations; factor in lakes as well
 
     if (refine .eq. 1 .and. tile_num .eq. 1) then
       ! Read in coarse parent slmask from sfc_data.nc -- this will have land/sea/sea ice mask
-      print '("[INFO] WDR MD1 STATIC_READ_LS parent sfc_data npe=",I0)', mpp_pe()
       call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "sfc_data", "slmsk", static_ls%ls_mask_grid,  tile_num)
     else
-      print '("[INFO] WDR MD2 STATIC_READ_LS other oro_data npe=",I0," tile_num=",I0)', mpp_pe(), tile_num
       call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "slmsk", static_ls%ls_mask_grid,  tile_num)
     endif
+
+!    ! Read in coarse parent slmask from sfc_data.nc -- this will have land/sea/sea ice mask
+!    print '("[INFO] WDR MD3 STATIC_READ_LS parent sfc_data npe=",I0)', mpp_pe()
+!    call mn_static_read_hires(npx, npy, 1, pelist, surface_dir, "sfc_data", "slmsk", parent_ls%ls_mask_grid, 1)
+
 
     call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "stddev", static_ls%orog_std_grid,  tile_num)
     call mn_static_read_hires(npx, npy, refine, pelist, surface_dir, "oro_data", "land_frac", static_ls%land_frac_grid,  tile_num)
@@ -924,7 +922,6 @@ contains
     ! To match initialization behavior, set any -999s to 0 in soil_type
     call mn_replace_low_values(static_ls%soil_type_grid, -100.0, 0.0)
 
-    print '("[INFO] WDR MZZ mn_static_read_ls npe=",I0," tile_num=",I0)', this_pe, tile_num
   end subroutine mn_static_read_ls
 
   subroutine mn_static_read_fix(static_fix, npx, npy, refine, pelist, surface_dir, tile_num, month)
@@ -971,7 +968,6 @@ contains
 
     call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "visible_black_sky_albedo", static_fix%alvsf_grid,  tile_num, time=month)
     call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "visible_white_sky_albedo", static_fix%alvwf_grid,  tile_num, time=month)
-
     call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "near_IR_black_sky_albedo", static_fix%alnsf_grid,  tile_num, time=month)
     call mn_static_read_hires(npx, npy, refine, pelist, trim(surface_dir), "snowfree_albedo", "near_IR_white_sky_albedo", static_fix%alnwf_grid,  tile_num, time=month)
 
@@ -1011,7 +1007,6 @@ contains
     fp_nx = fp_iend_fine - fp_istart_fine
     fp_ny = fp_jend_fine - fp_jstart_fine
 
-    print '("[INFO] WDR call mn_static_filename S1 npe=",I0)', mpp_pe()
     call mn_static_filename(surface_dir, parent_tile, file_prefix, refine, nc_filename)
 
     if (present(time)) then
@@ -1050,8 +1045,6 @@ contains
     fp_ny = fp_jend_fine - fp_jstart_fine
 
     ! TODO consider adding optional time argument as in mn_static_read_hires_r4
-
-    print '("[INFO] WDR call mn_static_filename S2 npe=",I0)', mpp_pe()
 
     call mn_static_filename(surface_dir, parent_tile, file_prefix, refine, nc_filename)
 
@@ -2963,7 +2956,7 @@ contains
 
     max1 = max(p_grid(ic,jc,1), p_grid(ic,jc+1,1), p_grid(ic+1,jc+1,1), p_grid(ic+1,jc,1))
     max2 = max(p_grid(ic,jc,2), p_grid(ic,jc+1,2), p_grid(ic+1,jc+1,2), p_grid(ic+1,jc,2))
-    
+
     min1 = min(p_grid(ic,jc,1), p_grid(ic,jc+1,1), p_grid(ic+1,jc+1,1), p_grid(ic+1,jc,1))
     min2 = min(p_grid(ic,jc,2), p_grid(ic,jc+1,2), p_grid(ic+1,jc+1,2), p_grid(ic+1,jc,2))
 

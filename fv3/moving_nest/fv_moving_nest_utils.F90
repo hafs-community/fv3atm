@@ -519,7 +519,7 @@ contains
 
 
 
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, mask_var, parent_mask_var, mask_val, default_val, take_action)
 
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
@@ -535,6 +535,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    logical, intent(in)                         :: take_action
 
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -559,7 +560,7 @@ contains
     ! Passes data from coarse grid to fine grid's halo
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -581,7 +582,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_const
 
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, mask_var, parent_mask_var, mask_val, default_grid, take_action)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
     integer, intent(in)                         :: interp_type
@@ -596,6 +597,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real, allocatable, intent(in)               :: default_grid(:,:)
+    logical, intent(in)                         :: take_action
 
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -606,7 +608,11 @@ contains
 
     this_pe = mpp_pe()
 
-    !!===========================================================                                                                                                                                      !!                                                                                                                                                                                                 !! Fill halo buffers                                                                                                                                                                               !!                                                                                                                                                                                                 !!===========================================================
+    !!===========================================================
+    !!
+    !! Fill halo buffers
+    !!
+    !!===========================================================
 
     call alloc_halo_buffer(nbuffer, north_fine, north_coarse, nest_domain, NORTH,  position, nest_level)
     call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, nest_level)
@@ -616,7 +622,7 @@ contains
     ! Passes data from coarse grid to fine grid's halo
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -638,7 +644,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_2d
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, take_action)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -653,16 +659,17 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    logical, intent(in)                         :: take_action
 
     real*8                          :: default_vector(low_z:high_z)
 
     default_vector = default_val
 
-    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector)
+    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector, take_action)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, take_action)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -677,6 +684,7 @@ contains
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val(low_z:high_z)
+    logical, intent(in)                         :: take_action
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -697,10 +705,11 @@ contains
     call alloc_halo_buffer(sbuffer, south_fine, south_coarse, nest_domain, SOUTH,  position, nest_level, low_z, high_z)
     call alloc_halo_buffer(ebuffer, east_fine,  east_coarse,  nest_domain, EAST,   position, nest_level, low_z, high_z)
     call alloc_halo_buffer(wbuffer, west_fine,  west_coarse,  nest_domain, WEST,   position, nest_level, low_z, high_z)
+
     ! Passes data from coarse grid to fine grid's halo
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -709,8 +718,11 @@ contains
       !!===========================================================
 
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
 
     endif
@@ -723,7 +735,7 @@ contains
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d
 
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid, take_action)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -737,6 +749,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real, allocatable, intent(in)               :: default_grid(:,:)
+    logical, intent(in)                         :: take_action
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -761,7 +774,7 @@ contains
     ! Passes data from coarse grid to fine grid's halo
     call mpp_update_nest_fine(data_var, nest_domain, wbuffer, sbuffer, ebuffer, nbuffer, nest_level, position=position)
 
-    if (is_fine_pe) then
+    if (is_fine_pe .and. take_action) then
 
       !!===========================================================
       !!
@@ -770,8 +783,11 @@ contains
       !!===========================================================
 
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+
       call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
 
     endif
@@ -794,7 +810,6 @@ contains
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position, nz
     integer, intent(in)                         :: nest_level
-
 
     call fill_nest_halos_from_parent_r4_3d_lowhighz(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nest_level, 1, nz)
 
@@ -1368,6 +1383,7 @@ contains
     this_pe = mpp_pe()
 
     allocate(data_array(x_size, y_size))
+
     data_array = -9999.9
 
     if (present(time)) then
@@ -2407,6 +2423,8 @@ contains
           if (tw .gt. 0.0) then
             x(i,j) = x(i,j) / tw
           else
+            !! WDR TODO SEAICE need to check mask_val
+
             num_reset = num_reset + 1
             dummy_val = buffer(ic, jc)
             dummy_mask = mask_var(i,j)

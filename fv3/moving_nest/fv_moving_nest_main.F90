@@ -355,129 +355,6 @@ contains
 
 
 
-
-  subroutine log_landsea_mask(Atm_block, GFS_control, GFS_sfcprop, time_step, parent_grid_num, child_grid_num)
-    type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
-    type(GFS_control_type), intent(in)   :: GFS_control   !< Physics metadata
-    type(GFS_sfcprop_type), intent(in)   :: GFS_sfcprop   !< Physics variable data
-    type(time_type), intent(in)          :: time_step     !< Current timestep
-    integer, intent(in)                  :: parent_grid_num, child_grid_num
-
-
-    character(len=160)  :: line
-    character(len=1)    :: mask_char
-    character(len=1)    :: num_char
-    integer :: i,j
-    integer :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, refine, im
-    integer :: ioffset, joffset
-    real    :: local_slmsk(Atm(2)%bd%isd:Atm(2)%bd%ied, Atm(2)%bd%jsd:Atm(2)%bd%jed)
-    integer :: nz, this_pe, n
-    integer :: num_land, num_water
-
-    this_pe = mpp_pe()
-    n = mygrid
-
-    refine = Atm(child_grid_num)%neststruct%refinement
-    ioffset = Atm(child_grid_num)%neststruct%ioffset
-    joffset = Atm(child_grid_num)%neststruct%joffset
-
-    do i=lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1)
-      line = ""
-      do j=lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
-        !print '("[INFO] WDR oro size npe=",I0," is_allocated=",L1)', this_pe, allocated(Atm(n)%oro)
-        !print '("[INFO] WDR oro size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1), lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
-        if (Atm(n)%oro(i,j) .eq. 1) then
-          ! land
-          line = trim(line) // "+"
-        elseif (Atm(n)%oro(i,j) .eq. 2) then
-          ! Water
-          line = trim(line) // "."
-        else
-          ! Unknown
-          line = trim(line) // "X"
-        endif
-      enddo
-      !print '("[INFO] WDR oro npe=",I0," time=",I0," i=",I0," ",A80)',this_pe,a_step,i,trim(line)
-
-    enddo
-
-
-    local_slmsk = 8
-    !print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
-    im = 0
-    do nb = 1,Atm_block%nblks
-      blen = Atm_block%blksz(nb)
-      do ix = 1, blen
-        i_pe = Atm_block%index(nb)%ii(ix)
-        j_pe = Atm_block%index(nb)%jj(ix)
-        im = im + 1
-
-        !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
-
-        local_slmsk(i_pe, j_pe) = GFS_sfcprop%slmsk(im)
-
-        if (allocated(Moving_nest)) then
-          if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
-            if (int(local_slmsk(i_pe,j_pe)) .ne. 8) then
-              if (int(local_slmsk(i_pe,j_pe)) .ne. int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe))) then
-                print '("[INFO] WDR mismatch local_slmsk_lake npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," slmsk=",I0," phys%slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," GFS_sfcprop%landfrac=",F10.5," land_frac_grid=",F12.5," GFS_sfcprop%lakefrac=",F10.5," GFS_sfcprop%oceanfrac=",F10.5)', &
-                    this_pe,a_step,i_pe,j_pe, int(local_slmsk(i_pe,j_pe)), &
-                    int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe)), &
-                    int(GFS_sfcprop%stype(im)), &
-                    int(Moving_nest(child_grid_num)%mn_static%fp_ls%soil_type_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
-                    GFS_sfcprop%landfrac(im), &
-                    int(Moving_nest(child_grid_num)%mn_static%fp_ls%land_frac_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
-                    GFS_sfcprop%lakefrac(im), &
-                    GFS_sfcprop%oceanfrac(im)
-              endif
-            endif
-          endif
-        endif
-      enddo
-    enddo
-
-    print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2)
-
-    line = ""
-    do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
-      write(num_char, "(I1)"), mod(j,10)
-      line = trim(line) // trim(num_char)
-    enddo
-    print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60)',this_pe,a_step,-99,trim(line)
-
-    do i=lbound(local_slmsk,1), ubound(local_slmsk,1)
-      line = ""
-      num_land = 0
-      num_water = 0
-
-      do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
-
-        if (local_slmsk(i,j) .eq. 1) then
-          ! land
-          line = trim(line) // "+"
-          num_land = num_land + 1
-        elseif (local_slmsk(i,j) .eq. 2) then
-          ! Water
-          line = trim(line) // "T"
-        elseif (local_slmsk(i,j) .eq. 0) then
-          ! Zero == lake?
-          line = trim(line) // "."
-          num_water = num_water + 1
-        elseif (local_slmsk(i,j) .eq. 8) then
-          ! Missing/edge
-          line = trim(line) // "M"
-        else
-          ! Unknown
-          print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," j=",I3," slmsk=",E12.5)',this_pe,a_step,i,j, local_slmsk(i,j)
-          write (mask_char, "(I1)") int(local_slmsk(i,j))
-          line = trim(line) // mask_char
-        endif
-      enddo
-      print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60," ",I2," ",I2)',this_pe,a_step,i,trim(line), num_land, num_water
-    enddo
-  end subroutine log_landsea_mask
-
-
   subroutine validate_geo_coords(tag, geo_grid, nest_geo_grid, refine, ioffset, joffset)
     character(len=*)                     :: tag
     real(kind=kind_phys), allocatable, intent(in)  :: geo_grid(:,:)
@@ -857,7 +734,7 @@ contains
     !---- Moving Nest local variables  -----
     integer                                        :: this_pe
     integer, pointer                               :: ioffset, joffset
-    real, pointer, dimension(:,:,:)                :: grid, agrid
+!    real, pointer, dimension(:,:,:)                :: grid, agrid
     type(domain2d), pointer                        :: domain_coarse, domain_fine
 
     ! Constants for mpp calls
@@ -931,10 +808,10 @@ contains
     logical :: use_static_data_tiles, do_read_tile
     integer :: fp_nx, fp_ny, nest_nx, nest_ny
     logical :: run_tile_validation = .False.
-
+    integer :: an
 !    type(mn_surface_grids)   :: mn_static_temp
 
-    
+
     !! For NOAHMP
     ! (/0.0, 0.0, 0.0,  0.1,0.4,1.0,2.0/) -- 3 snow levels, 4 soil levels
     real :: zsns_default(-2:4)
@@ -991,7 +868,7 @@ contains
     num_nests = global_nest_domain%num_nest
 
     if (Moving_nest(child_grid_num)%first_nest_move) then
-      
+
       call fv_moving_nest_init_clocks(Atm(n)%flagstruct%fv_timers)
 
       ! If NSST is turned off, do not move the NSST variables.
@@ -1028,7 +905,7 @@ contains
     domain_fine => Atm(child_grid_num)%domain
     parent_tile = Atm(child_grid_num)%neststruct%parent_tile
     static_nest_num = 6 + child_grid_num   !! TODO update this for global nests and telescoping nests
-    
+
     domain_coarse => Atm(parent_grid_num)%domain
     is_moving_nest = Moving_nest(child_grid_num)%mn_flag%is_moving_nest
     nz = Atm(n)%npz
@@ -1123,85 +1000,100 @@ contains
       !! Step 1.4 -- Read in the full panel grid definition
       !!============================================================================
 
-      if (is_fine_pe .and. take_action) then
+      use_static_data_tiles = .True.
+
+      !print '("[INFO] WDR INIT BEFORE npe=",I0," parent_tile=",I0," child_grid_num=",I0," is_fine_pe=",L1," take_action=",L1," size(Atm)=",I0," n=",I0)', this_pe, parent_tile, child_grid_num, is_fine_pe, take_action, size(Atm), n
+
+
+      !do an = 1, size(Atm)
+      !  print '("[INFO] WDR INIT BEFORE npe=",I0," allocated(Atm(",I0,")%pelist=",L1)', this_pe, an, allocated(Atm(an)%pelist)
+      !  print '("[INFO] WDR INIT BEFORE npe=",I0," size(Atm(",I0,")%pelist=",I0," pe=",I0)', this_pe, an, size(Atm(an)%pelist), Atm(an)%pelist(1)
+      !enddo
+
+      if (use_static_data_tiles .and. is_fine_pe) then
+!      if (use_static_data_tiles .and. is_fine_pe .and. take_action) then
 
         nx = Atm(n)%npx - 1
         ny = Atm(n)%npy - 1
 
-        grid => Atm(n)%gridstruct%grid
-        agrid => Atm(n)%gridstruct%agrid
+!        grid => Atm(n)%gridstruct%grid
+!        agrid => Atm(n)%gridstruct%agrid
 
         ! Read in static lat/lon data for parent at nest resolution; returns fp_ full panel variables
         ! Also read in other static variables from the orography and surface files
 
-        use_static_data_tiles = .True.
+        fp_nx = (Atm(parent_grid_num)%npx - 1) * x_refine
+        fp_ny = (Atm(parent_grid_num)%npy - 1) * x_refine
+        nest_nx = Atm(child_grid_num)%npx - 1
+        nest_ny = Atm(child_grid_num)%npy - 1
 
-        !print '("[INFO] WDR TILE A0 npe=",I0)', this_pe
-        
-        if (use_static_data_tiles) then
-          
-          fp_nx = (Atm(parent_grid_num)%npx - 1) * x_refine
-          fp_ny = (Atm(parent_grid_num)%npy - 1) * x_refine
-          nest_nx = Atm(child_grid_num)%npx - 1
-          nest_ny = Atm(child_grid_num)%npy - 1
-          
-          ! static_grid_ratio ranges from 0.0 to 1.0;  0.0 is the most memory efficient; 1.0 is the most CPU efficient
-          !  0.0 will read in a tile the same size as the nest, and reread each time the nest moves
-          !  1.0 will read in the entire parent grid at high-resolution at the beginning, and never read again
-          !     fractional values will be reread when the nest has moved outside of the static data tile
-          
-          !print '("[INFO] WDR TILE A1 npe=",I0)', this_pe
-          
-          if (Moving_nest(child_grid_num)%first_nest_move) then
-            print '("[INFO] WDR TILE A2 npe=",I0," static_grid_ratio=",F5.3)', this_pe,  Moving_nest(child_grid_num)%mn_flag%static_grid_ratio
-            !call initialize_static_tile_bounds(Moving_nest(child_grid_num)%mn_static, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, nest_nx, nest_ny, ratio)
+        ! static_grid_ratio ranges from 0.0 to 1.0;  0.0 is the most memory efficient; 1.0 is the most CPU efficient
+        !  0.0 will read in a tile the same size as the nest, and reread each time the nest moves
+        !  1.0 will read in the entire parent grid at high-resolution at the beginning, and never read again
+        !     fractional values will be reread when the nest has moved outside of the static data tile
 
-            print '("[INFO] WDR OTILE AA npe=",I0," parent_tile=",I0)', this_pe, parent_tile
+        if (Moving_nest(child_grid_num)%first_nest_move .and. take_action) then
+!        if (Moving_nest(child_grid_num)%first_nest_move) then
+          !call initialize_static_tile_bounds(Moving_nest(child_grid_num)%mn_static, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, nest_nx, nest_ny, ratio)
+          !print '("[INFO] WDR INIT STATIC TILE BOUNDS npe=",I0," parent_tile=",I0," child_grid_num=",I0)', this_pe, parent_tile, child_grid_num
 
-            call initialize_static_tile_bounds(Moving_nest(child_grid_num)%mn_static, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, nest_nx, nest_ny, Moving_nest(child_grid_num)%mn_flag%static_grid_ratio)
-            print '("[INFO] WDR OTILE AB npe=",I0)', this_pe
+          call initialize_static_tile_bounds(Moving_nest(child_grid_num)%mn_static, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, nest_nx, nest_ny, Moving_nest(child_grid_num)%mn_flag%static_grid_ratio)
 
-          endif
-          
-          
-          !print '("[INFO] WDR TILE A3 npe=",I0," child_grid_num=",I0," n=",I0," allocated=",L1)', this_pe, child_grid_num, n, allocated(Atm(n)%pelist)
-          !call check_update_static_data(fp_nx, fp_ny, nest_nx, nest_ny, ioffset, joffset, x_refine, Moving_nest(child_grid_num), Atm(child_grid_num)%pelist, parent_tile, month)
-
-          print '("[INFO] WDR OTILE AC npe=",I0," child_grid_num=",I0," surface_dir=",A180)', this_pe, child_grid_num, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir)
-
-          call check_update_static_tile_data(fp_nx, fp_ny, nest_nx, nest_ny, ioffset, joffset, x_refine, a_step, Moving_nest(child_grid_num)%mn_static, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), Atm(n)%pelist, parent_tile, month, use_timers, id_movnest_readstatic, do_read_tile)
-
-          print '("[INFO] WDR OTILE AD npe=",I0)', this_pe
-
-
-          !print '("[INFO] WDR TILE A4 npe=",I0," allocated(deep_soil_temp_grid)=",L1)', this_pe, allocated(Moving_nest(child_grid_num)%mn_static%deep_soil_temp_grid)
-          
         endif
-      
+      endif
+
+      if (use_static_data_tiles .and. is_fine_pe .and. take_action) then
+
+        nx = Atm(n)%npx - 1
+        ny = Atm(n)%npy - 1
+
+!        grid => Atm(n)%gridstruct%grid
+!        agrid => Atm(n)%gridstruct%agrid
+
         ! Read in static lat/lon data for parent at nest resolution; returns fp_ full panel variables
         ! Also read in other static variables from the orography and surface files
-        
+
+        fp_nx = (Atm(parent_grid_num)%npx - 1) * x_refine
+        fp_ny = (Atm(parent_grid_num)%npy - 1) * x_refine
+        nest_nx = Atm(child_grid_num)%npx - 1
+        nest_ny = Atm(child_grid_num)%npy - 1
+
+        ! static_grid_ratio ranges from 0.0 to 1.0;  0.0 is the most memory efficient; 1.0 is the most CPU efficient
+        !  0.0 will read in a tile the same size as the nest, and reread each time the nest moves
+        !  1.0 will read in the entire parent grid at high-resolution at the beginning, and never read again
+        !     fractional values will be reread when the nest has moved outside of the static data tile
+
+        !call check_update_static_data(fp_nx, fp_ny, nest_nx, nest_ny, ioffset, joffset, x_refine, Moving_nest(child_grid_num), Atm(child_grid_num)%pelist, parent_tile, month)
+
+        !print '("[INFO] WDR INIT UPDATE STATIC TILE npe=",I0," parent_tile=",I0," child_grid_num=",I0)', this_pe, parent_tile, child_grid_num
+
+        call check_update_static_tile_data(fp_nx, fp_ny, nest_nx, nest_ny, ioffset, joffset, x_refine, a_step, Moving_nest(child_grid_num)%mn_static, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), Atm(n)%pelist, parent_tile, month, use_timers, id_movnest_readstatic, do_read_tile)
+
+      endif
+
+
+      ! Read in static lat/lon data for parent at nest resolution; returns fp_ full panel variables
+      ! Also read in other static variables from the orography and surface files
+      !  Caution -- must use Atm(n)%pelist to get the current group of PEs.  Atm(child_grid_num)%pelist is incorrect and will cause a crash.
+!      if (is_fine_pe) then
+      if (is_fine_pe .and. take_action) then
+
         if (Moving_nest(child_grid_num)%first_nest_move) then
 
-          print '("[INFO] WDR OTILE A1 npe=",I0)', this_pe
-          call mn_latlon_read_hires_parent(Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(child_grid_num)%pelist, fp_super_tile_geo, &
+          !print '("[INFO] WDR INIT LANDSURF npe=",I0," parent_tile=",I0," child_grid_num=",I0," n=",I0)', this_pe, parent_tile, child_grid_num, n
+
+          call mn_latlon_read_hires_parent(Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(n)%pelist, fp_super_tile_geo, &
               trim(Moving_nest(child_grid_num)%mn_flag%surface_dir),  parent_tile)
 
-          print '("[INFO] WDR OTILE A2 npe=",I0)', this_pe
           ! Read static parent land sea mask fields
-          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%parent_ls, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, 1, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
+          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%parent_ls, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, 1, Atm(n)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
 
-          print '("[INFO] WDR OTILE A3 npe=",I0)', this_pe
           ! Read full panel
-          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%fp_ls, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
-
-          print '("[INFO] WDR OTILE A4 npe=",I0)', this_pe, child_grid_num, static_nest_num
+          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%fp_ls, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(n)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
 
           ! Read static nest land sea mask fields
-          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%nest_ls, Atm(child_grid_num)%npx, Atm(child_grid_num)%npy, 1, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
+          call mn_static_read_ls(Moving_nest(child_grid_num)%mn_static%nest_ls, Atm(child_grid_num)%npx, Atm(child_grid_num)%npy, 1, Atm(n)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
 
-
-          print '("[INFO] WDR OTILE A5 npe=",I0)', this_pe
 
           !call validate_geo_coords("LAT", Moving_nest(child_grid_num)%mn_static%fp_ls%geolat_grid, Moving_nest(child_grid_num)%mn_static%nest_ls%geolat_grid, x_refine, ioffset, joffset)
           !call validate_geo_coords("LON", Moving_nest(child_grid_num)%mn_static%fp_ls%geolon_grid, Moving_nest(child_grid_num)%mn_static%nest_ls%geolon_grid, x_refine, ioffset, joffset)
@@ -1217,10 +1109,11 @@ contains
           !  Important this is done after adjusting for lakes!
           call mn_phys_set_slmsk(Atm, n, Moving_nest(child_grid_num)%mn_static, ioffset, joffset, x_refine)
 
+
           !if (.not. use_static_data_tiles) then
 !          if (run_tile_validation) then
 !            ! Read in substrate_temperature and the associated geolat/geolon to validate the tiled static read correctness
-!            
+!
 !            call mn_static_read_hires(Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), "substrate_temperature", "substrate_temperature", mn_static_temp%deep_soil_temp_grid,  parent_tile)
 !            ! set any -999s to +4C
 !            call mn_replace_low_values(mn_static_temp%deep_soil_temp_grid, -100.0, 277.0)
@@ -1234,14 +1127,15 @@ contains
 !            call compare_tile_grids(Moving_nest(child_grid_num)%mn_static%deep_soil_temp_grid, mn_static_temp%deep_soil_temp_grid, "deep_soil_temp_grid")
 !
 !          endif
-            
+
 
           ! Read in full panel fix data
-          !call mn_static_read_fix(Moving_nest(child_grid_num)%mn_static%fp_fix, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, month)
+          !call mn_static_read_fix(Moving_nest(child_grid_num)%mn_static%fp_fix, Atm(parent_grid_num)%npx, Atm(parent_grid_num)%npy, x_refine, Atm(n)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, month)
           ! This has to be done by the static tile read
 
+
           ! Read in nest fix data
-          call mn_static_read_fix(Moving_nest(child_grid_num)%mn_static%nest_fix, Atm(child_grid_num)%npx, Atm(child_grid_num)%npy, 1, Atm(child_grid_num)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, month)
+          !call mn_static_read_fix(Moving_nest(child_grid_num)%mn_static%nest_fix, Atm(child_grid_num)%npx, Atm(child_grid_num)%npy, 1, Atm(n)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, month)
 
           ! Overwrite fix data from nest initialization
           call mn_static_overwrite_fix_from_nest(Moving_nest(child_grid_num)%mn_static%fp_fix, Moving_nest(child_grid_num)%mn_static%nest_fix, x_refine, ioffset, joffset)
@@ -1250,7 +1144,7 @@ contains
           call deallocate_land_mask_grids(Moving_nest(child_grid_num)%mn_static%nest_ls)
           call deallocate_fix_grids(Moving_nest(child_grid_num)%mn_static%nest_fix)
 
-          print '("[INFO] WDR OTILE A9 npe=",I0)', this_pe
+          !print '("[INFO] WDR INIT DONE LANDSURF npe=",I0," parent_tile=",I0," child_grid_num=",I0," n=",I0)', this_pe, parent_tile, child_grid_num, n
 
         endif
 
@@ -1279,7 +1173,7 @@ contains
 
 
       call mn_prog_fill_nest_halos_from_parent(Atm, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz)
-      call mn_phys_fill_nest_halos_from_parent(Atm, GFS_control, Moving_nest(child_grid_num)%mn_static, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz)
+      call mn_phys_fill_nest_halos_from_parent(Atm, GFS_control, Moving_nest(child_grid_num)%mn_static, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz, take_action)
 
       if (use_timers) call mpp_clock_end (id_movnest2)
       if (use_timers) call mpp_clock_begin (id_movnest3)
@@ -1522,7 +1416,7 @@ contains
       ! Refill the halos around the edge of the nest from the parent
 
       call mn_prog_fill_nest_halos_from_parent(Atm, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz)
-      call mn_phys_fill_nest_halos_from_parent(Atm, GFS_control, Moving_nest(child_grid_num)%mn_static, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz)
+      call mn_phys_fill_nest_halos_from_parent(Atm, GFS_control, Moving_nest(child_grid_num)%mn_static, n, child_grid_num, is_fine_pe, global_nest_domain, nest_level, nz, take_action)
 
       if (use_timers) call mpp_clock_end (id_movnest7_1)
 

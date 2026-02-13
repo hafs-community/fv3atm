@@ -131,6 +131,25 @@ module fv_moving_nest_types_mod
   ! TODO deallocate these at end of model run.  They are only allocated once, at first nest move, inside mn_static_read_hires().
   !  Note these are only 32 bits for now; matching the precision of the input netCDF files
   !  though the model generally handles physics variables with 64 bit precision
+
+  ! Each PE only needs one of these.
+  type mn_tiled_grids
+    ! Variables for static tile partial reads
+    integer :: fp_nx, fp_ny
+    integer :: tile_nx, tile_ny
+    integer :: tile_ioffset, tile_joffset
+    integer :: num_reads
+
+    type(mn_land_mask_grids)  :: parent_ls
+    type(mn_land_mask_grids)  :: fp_ls
+
+    ! type(mn_fix_grids)        :: parent_fix    ! Not needed at present
+    type(mn_fix_grids)        :: fp_fix
+
+    logical                   :: initialized
+
+  end type mn_tiled_grids
+
   type mn_surface_grids
     ! Variables for static tile partial reads
     integer :: fp_nx, fp_ny
@@ -146,7 +165,10 @@ module fv_moving_nest_types_mod
     type(mn_fix_grids)        :: fp_fix
     type(mn_fix_grids)        :: nest_fix
 
+    logical                   :: initialized
+
   end type mn_surface_grids
+
 
   type fv_moving_nest_physics_type
     real, _ALLOCATABLE                  :: ts(:,:)          _NULL   !< 2D skin temperature/SST
@@ -287,7 +309,7 @@ module fv_moving_nest_types_mod
     real (kind=kind_phys), _ALLOCATABLE :: fice (:,:)       _NULL   !< sea ice fraction
     real (kind=kind_phys), _ALLOCATABLE :: hice (:,:)       _NULL   !< sea ice thickness
 
-    
+
   end type fv_moving_nest_physics_type
 
   type fv_moving_nest_type
@@ -311,7 +333,7 @@ module fv_moving_nest_types_mod
   logical, dimension(MAX_NNEST) :: is_moving_nest = .False.
   character(len=120)            :: surface_dir = "INPUT/moving_nest"
   integer, dimension(MAX_NNEST) :: terrain_smoother = 4  ! 0 -- all high-resolution data, 1 - static nest smoothing algorithm with blending zone of 5 points, 2 - blending zone of 10 points, 5 - 5 point smoother, 9 - 9 point smoother
-  real, dimension(MAX_NNEST)    :: static_grid_ratio = 0.50 !  
+  real, dimension(MAX_NNEST)    :: static_grid_ratio = 0.50 !
   integer, dimension(MAX_NNEST) :: vortex_tracker = 0 ! 0 - not a moving nest, tracker not needed
   ! 1 - prescribed nest moving
   ! 2 - following child domain center
@@ -350,7 +372,7 @@ contains
 
     mn_phys%leading_edge(isd:isd+2,:) = .True.
     mn_phys%leading_edge(ied-2:ied,:) = .True.
-    
+
     mn_phys%leading_edge(:, jsd:jsd+2) = .True.
     mn_phys%leading_edge(:, jed-2:jed) = .True.
 
@@ -370,7 +392,7 @@ contains
 
 
   end subroutine mn_set_leading_edge
-  
+
   subroutine fv_moving_nest_init(Atm, this_grid)
     type(fv_atmos_type), allocatable, intent(in) :: Atm(:)
     integer, intent(in)                          :: this_grid
@@ -392,6 +414,7 @@ contains
 
     do n=1,ngrids
       if (Atm(n)%neststruct%nested) then
+        !print '("[INFO] WDR types first_nest_move TRUE npe=",I0," n=",I0)', mpp_pe(), n
         Moving_nest(n)%first_nest_move                = .True.    ! TODO only set this true if is_moving_nest
         Moving_nest(n)%mn_flag%is_moving_nest         = is_moving_nest(n)
         Moving_nest(n)%mn_flag%surface_dir            = trim(adjustl(surface_dir))
@@ -405,6 +428,7 @@ contains
         Moving_nest(n)%mn_flag%corral_y               = corral_y(n)
         Moving_nest(n)%mn_flag%outatcf_lun            = outatcf_lun(n)
       else
+        !print '("[INFO] WDR types first_nest_move FALSE npe=",I0," n=",I0)', mpp_pe(), n
         Moving_nest(n)%first_nest_move                = .False.
         Moving_nest(n)%mn_flag%is_moving_nest         = .false.
         Moving_nest(n)%mn_flag%static_grid_ratio      = 0.50
@@ -792,7 +816,7 @@ contains
       allocate ( mn_phys%sncovr(isd:ied, jsd:jed) )
       allocate ( mn_phys%fice(isd:ied, jsd:jed) )
       allocate ( mn_phys%hice(isd:ied, jsd:jed) )
-      
+
       !allocate ( mn_phys%ustar1(isd:ied, jsd:jed) )
     endif
 
