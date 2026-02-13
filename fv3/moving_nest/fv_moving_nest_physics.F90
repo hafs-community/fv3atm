@@ -800,6 +800,15 @@ contains
               GFS_sfcprop%albdifnir_lnd (im)   = 0.5
             endif
 
+            ! ICEFIX handle tiice
+            do k = 1, GFS_control%kice
+              GFS_sfcprop%tiice(im,k) = mn_phys%tiice(i,j,k)
+            enddo
+            if (mn_phys%tisfc(i,j) .lt. 240.0 .or. mn_phys%tisfc(i,j) .gt. 285.0 ) then
+              mn_phys%tisfc(i,j) = 273.15 - 5.0
+            endif
+            GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
+
             ! Sea-ice related variables
             if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 2) ) then
               GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
@@ -847,7 +856,7 @@ contains
 
           if (GFS_control%lsm == GFS_control%lsm_noahmp) then
 
-            GFS_sfcprop%scolor(im)  = mn_phys%soilcolor(i,j)
+            GFS_sfcprop%scolor(im)     = mn_phys%soilcolor(i,j)
             GFS_sfcprop%tvxy(im)       = mn_phys%tvxy(i,j)
             GFS_sfcprop%tgxy(im)       = mn_phys%tgxy(i,j)
             GFS_sfcprop%canicexy(im)   = mn_phys%canicexy(i,j)
@@ -878,20 +887,11 @@ contains
             GFS_sfcprop%rechxy(im)     = mn_phys%rechxy(i,j)
             GFS_sfcprop%snowd(im)      = mn_phys%snowd(i,j)
             GFS_sfcprop%weasd(im)      = mn_phys%weasd(i,j)
+            GFS_sfcprop%sncovr(im)     = mn_phys%sncovr(i,j)
 
             if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0) then
               GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0
             endif
-
-            ! ICEFIX handle tiice
-            do k = 1, GFS_control%kice
-              GFS_sfcprop%tiice(im,k) = mn_phys%tiice(i,j,k)
-            enddo
-            if (mn_phys%tisfc(i,j) .lt. 240.0 .or. mn_phys%tisfc(i,j) .gt. 285.0 ) then
-              mn_phys%tisfc(i,j) = 273.15 - 5.0
-            endif
-            GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
-            GFS_sfcprop%sncovr(im) = mn_phys%sncovr(i,j)
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
