@@ -284,15 +284,13 @@ contains
           if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! Land
           GFS_Sfcprop%oceanfrac(im) = 0   ! Land -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 1    ! Land -- TODO permit fractions
-          GFS_Sfcprop%fice(im) = 0
-          GFS_Sfcprop%hice(im) = 0
+          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
         !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_WATER ) then   ! Ocean
         else if (cell_slmsk .eq. M_WATER ) then   ! Ocean
           if (move_nsst) GFS_Sfcprop%ifd(im) = 1         ! Ocean
           GFS_Sfcprop%oceanfrac(im) = 1   ! Ocean -- TODO permit fractions
           GFS_Sfcprop%landfrac(im) = 0    ! Ocean -- TODO permit fractions
-          GFS_Sfcprop%fice(im) = 0
-          GFS_Sfcprop%hice(im) = 0
+          GFS_Sfcprop%fice(im) = 0        ! ice fraction over open water grid
         !else if (mn_static%fp_ls%ls_mask_grid(i_idx, j_idx) .eq. M_SEAICE ) then     ! Sea Ice
         else if (cell_slmsk .eq. M_SEAICE ) then     ! Sea Ice
           if (move_nsst) GFS_Sfcprop%ifd(im) = 0         ! For Sea ice - ifd is set to Land 0, checked in sfc files
@@ -896,13 +894,8 @@ contains
             GFS_sfcprop%tisfc(im) = mn_phys%tisfc(i,j)
             GFS_sfcprop%sncovr(im) = mn_phys%sncovr(i,j)
 
-            if ( (nint(GFS_sfcprop%slmsk(im)) .eq. 2) ) then
-              GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
-              GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
-            else
-              GFS_sfcprop%fice(im) = 0.
-              GFS_sfcprop%hice(im) = 0.
-            endif
+            GFS_sfcprop%fice(im) = mn_phys%fice(i,j)
+            GFS_sfcprop%hice(im) = mn_phys%hice(i,j)
 
             do k = 1, GFS_control%lsoil
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
