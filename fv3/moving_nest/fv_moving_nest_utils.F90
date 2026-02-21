@@ -509,7 +509,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_r8_2d
 
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
     integer, intent(in)                         :: interp_type
@@ -523,6 +523,10 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in), optional                :: missing_val
+
+    !Local variables
+    real*8                                      :: missloc_val
 
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -531,6 +535,12 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    if (present(missing_val)) then
+      missloc_val = missing_val
+    else
+      missloc_val = default_val
+    endif
 
     this_pe = mpp_pe()
 
@@ -556,10 +566,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
 
     endif
 
@@ -570,7 +580,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_const
 
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
     integer, intent(in)                         :: interp_type
@@ -583,8 +593,11 @@ contains
     real, allocatable, intent(in)             :: mask_var(:,:)
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in), optional   :: missing_grid(:,:)
 
+    !local variables
+    real*8, allocatable                         :: missloc_grid(:,:)
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
     type(bbox)                          :: south_fine, south_coarse
@@ -592,6 +605,13 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    allocate(missloc_grid, source=default_grid)
+    if  (present(missing_grid)) then
+      missloc_grid = missing_grid
+    else
+      missloc_grid = default_grid
+    endif
 
     this_pe = mpp_pe()
 
@@ -617,10 +637,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
 
     endif
 
@@ -628,10 +648,11 @@ contains
     deallocate(sbuffer)
     deallocate(ebuffer)
     deallocate(wbuffer)
+    deallocate(missloc_grid)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_2d
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -645,16 +666,24 @@ contains
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in), optional                :: missing_val
 
+    ! Local variables
     real*8                          :: default_vector(low_z:high_z)
+    real*8                          :: missloc_vector(low_z:high_z)
 
     default_vector = default_val
+    if (present(missing_val)) then
+      missloc_vector = missing_val
+    else
+      missloc_vector = default_val
+    endif
 
-    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector)
+    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector, missloc_vector)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -668,6 +697,10 @@ contains
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val(low_z:high_z)
+    real*8, intent(in), optional                :: missing_val(low_z:high_z)
+
+    ! Local variables
+    real*8                                      :: missloc_val(low_z:high_z)
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -676,6 +709,12 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    if (present(missing_val)) then
+      missloc_val = missing_val
+    else
+      missloc_val = default_val
+    endif
 
     this_pe = mpp_pe()
 
@@ -701,10 +740,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
 
     endif
 
@@ -715,7 +754,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d
 
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -728,7 +767,11 @@ contains
     real, allocatable, intent(in)             :: mask_var(:,:)
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in), optional   :: missing_grid(:,:)
+
+    ! Local variables
+    real*8, allocatable                         :: missloc_grid(:,:)
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -737,6 +780,13 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    allocate(missloc_grid, source=default_grid)
+    if (present(missing_grid)) then
+      missloc_grid = missing_grid
+    else
+      missloc_grid = default_grid
+    endif
 
     this_pe = mpp_pe()
 
@@ -762,10 +812,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
 
     endif
 
@@ -773,6 +823,7 @@ contains
     deallocate(sbuffer)
     deallocate(ebuffer)
     deallocate(wbuffer)
+    deallocate(missloc_grid)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d
 
@@ -1774,7 +1825,7 @@ contains
 
   end subroutine fill_nest_from_buffer_r8_2d
 
-  subroutine fill_nest_from_buffer_masked_r8_2d_const(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_from_buffer_masked_r8_2d_const(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     implicit none
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
@@ -1788,6 +1839,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in)                          :: missing_val
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1802,7 +1854,7 @@ contains
       print '("[WARN] fv_moving_nest_utils.F90 fill_nest_from_buffer_mask interp_type 4 not implemented. var_name=",A16)', var_name
       call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '2D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1812,7 +1864,7 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_2d_const
 
-  subroutine fill_nest_from_buffer_masked_r8_2d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_masked_r8_2d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
@@ -1825,7 +1877,8 @@ contains
     real, allocatable, intent(in)               :: mask_var(:,:)
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: missing_grid(:,:)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1840,7 +1893,7 @@ contains
       print '("[WARN] fv_moving_nest_utils.F90 fill_nest_from_buffer_mask interp_type 4 not implemented. var_name=",A16)', var_name
       call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '2D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1850,7 +1903,7 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_2d_2d
 
-  subroutine fill_nest_from_buffer_masked_r8_3d_1d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_vector)
+  subroutine fill_nest_from_buffer_masked_r8_3d_1d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_vector, missing_vector)
     implicit none
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
@@ -1864,6 +1917,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_vector(low_z:high_z)
+    real*8, intent(in)                          :: missing_vector(low_z:high_z)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1880,7 +1934,7 @@ contains
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
       !call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector, missing_vector)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1890,7 +1944,7 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_3d_1d
 
-  subroutine fill_nest_from_buffer_masked_r8_3d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_masked_r8_3d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
@@ -1903,7 +1957,8 @@ contains
     real, allocatable, intent(in)               :: mask_var(:,:)
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: missing_grid(:,:)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1920,7 +1975,7 @@ contains
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
       !call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid, missing_grid)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -2178,7 +2233,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_r8_2d
 
-  subroutine fill_nest_from_buffer_cell_center_masked_2d_const(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_from_buffer_cell_center_masked_2d_const(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2192,6 +2247,7 @@ contains
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val
     real*8, intent(in)                            :: default_val
+    real*8, intent(in)                            :: missing_val
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2302,13 +2358,14 @@ contains
 
           endif
 
-          if (tw .gt. 0.0) then
-            x(i,j) = x(i,j) / tw
+          if (mask_var(i,j) .eq. mask_val) then
+            if (tw .gt. 0.0) then
+              x(i,j) = x(i,j) / tw
+            else
+              x(i,j) = default_val
+            endif
           else
-            num_reset = num_reset + 1
-            dummy_val = buffer(ic, jc)
-            dummy_mask = mask_var(i,j)
-            x(i,j) = default_val
+            x(i,j) = missing_val
           endif
 
           !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_const npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
@@ -2321,7 +2378,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_masked_2d_const
 
-  subroutine fill_nest_from_buffer_cell_center_masked_2d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_cell_center_masked_2d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2334,7 +2391,8 @@ contains
     real, allocatable, intent(in)                 :: mask_var(:,:)
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val
-    real, allocatable, intent(in)                 :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: missing_grid(:,:)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2442,13 +2500,14 @@ contains
 
           endif
 
-          if (tw .gt. 0.0) then
-            x(i,j) = x(i,j) / tw
+          if (mask_var(i,j) .eq. mask_val) then
+            if (tw .gt. 0.0) then
+              x(i,j) = x(i,j) / tw
+            else
+              x(i,j) = default_grid(i,j)
+            endif
           else
-            num_reset = num_reset + 1
-            dummy_val = buffer(ic, jc)
-            dummy_mask = mask_var(i,j)
-            x(i,j) = default_grid(i,j)
+            x(i,j) = missing_grid(i,j)
           endif
 
           !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_2d npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
@@ -2461,7 +2520,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_masked_2d_2d
 
-  subroutine fill_nest_from_buffer_cell_center_masked_3d_1d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector)
+  subroutine fill_nest_from_buffer_cell_center_masked_3d_1d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector, missing_vector)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2475,6 +2534,7 @@ contains
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val, low_z, high_z
     real*8, intent(in)                            :: default_vector(low_z:high_z)
+    real*8, intent(in)                            :: missing_vector(low_z:high_z)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2539,12 +2599,14 @@ contains
               tw = tw + wt(i,j,4)
             endif
 
-            if (tw .gt. 0.0) then
-              x(i,j,k) = x(i,j,k) / tw
+            if (mask_var(i,j) .eq. mask_val) then
+              if (tw .gt. 0.0) then
+                x(i,j,k) = x(i,j,k) / tw
+              else
+                x(i,j,k) = default_vector(k)
+              endif
             else
-              dummy_val = buffer(ic, jc,k)
-              dummy_mask = mask_var(i,j)
-              x(i,j,k) = default_vector(k)
+              x(i,j,k) = missing_vector(k)
             endif
 
           enddo
@@ -2559,7 +2621,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_masked_3d_1d
 
-  subroutine fill_nest_from_buffer_cell_center_masked_3d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid)
+  subroutine fill_nest_from_buffer_cell_center_masked_3d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2572,7 +2634,8 @@ contains
     real, allocatable, intent(in)                 :: mask_var(:,:)
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val, low_z, high_z
-    real, allocatable, intent(in)                 :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: missing_grid(:,:)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2637,12 +2700,14 @@ contains
               tw = tw + wt(i,j,4)
             endif
 
-            if (tw .gt. 0.0) then
-              x(i,j,k) = x(i,j,k) / tw
+            if (mask_var(i,j) .eq. mask_val) then
+              if (tw .gt. 0.0) then
+                x(i,j,k) = x(i,j,k) / tw
+              else
+                x(i,j,k) = default_grid(i,j)
+              endif
             else
-              dummy_val = buffer(ic, jc,k)
-              dummy_mask = mask_var(i,j)
-              x(i,j,k) = default_grid(i,j)
+              x(i,j,k) = missing_grid(i,j)
             endif
 
           enddo

@@ -156,7 +156,7 @@ module fv_moving_nest_types_mod
 
     real (kind=kind_phys), _ALLOCATABLE :: zorl (:,:)       _NULL   !< roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorll (:,:)      _NULL   !< land roughness length
-    !real (kind=kind_phys), _ALLOCATABLE :: zorli (:,:)     _NULL   !< ice surface roughness length ! TODO do we need this?
+    real (kind=kind_phys), _ALLOCATABLE :: zorli (:,:)      _NULL   !< ice surface roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorlw (:,:)      _NULL   !< wave surface roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorlwav (:,:)    _NULL   !< wave surface roughness in cm derived from wave model
 
@@ -276,6 +276,12 @@ module fv_moving_nest_types_mod
 
     real (kind=kind_phys), _ALLOCATABLE :: fice (:,:)       _NULL   !< sea ice fraction
     real (kind=kind_phys), _ALLOCATABLE :: hice (:,:)       _NULL   !< sea ice thickness
+
+    real (kind=kind_phys), _ALLOCATABLE ::srflag (:,:)      _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::snodl (:,:)       _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::weasdl (:,:)      _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::snodi (:,:)       _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::weasdi (:,:)      _NULL
 
   end type fv_moving_nest_physics_type
 
@@ -640,8 +646,9 @@ contains
 
       allocate ( mn_phys%zorl(isd:ied, jsd:jed) )
       allocate ( mn_phys%zorll(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zorlwav(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zorli(isd:ied, jsd:jed) )
       allocate ( mn_phys%zorlw(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zorlwav(isd:ied, jsd:jed) )
 
       allocate ( mn_phys%usfco(isd:ied, jsd:jed) )
       allocate ( mn_phys%vsfco(isd:ied, jsd:jed) )
@@ -749,6 +756,13 @@ contains
       allocate ( mn_phys%hice(isd:ied, jsd:jed) )
 
       !allocate ( mn_phys%ustar1(isd:ied, jsd:jed) )
+
+      allocate ( mn_phys%srflag(isd:ied, jsd:jed) )
+      allocate ( mn_phys%snodl(isd:ied, jsd:jed) )
+      allocate ( mn_phys%weasdl(isd:ied, jsd:jed) )
+      allocate ( mn_phys%snodi(isd:ied, jsd:jed) )
+      allocate ( mn_phys%weasdi(isd:ied, jsd:jed) )
+
     endif
 
     mn_phys%ts = +99999.9
@@ -778,8 +792,9 @@ contains
 
       mn_phys%zorl = +99999.9
       mn_phys%zorll = +99999.9
-      mn_phys%zorlwav = +99999.9
+      mn_phys%zorli = +99999.9
       mn_phys%zorlw = +99999.9
+      mn_phys%zorlwav = +99999.9
 
       mn_phys%usfco = +99999.9
       mn_phys%vsfco = +99999.9
@@ -887,6 +902,13 @@ contains
       mn_phys%hice = +99999.9
 
       !mn_phys%ustar1 = +99999.9
+
+      mn_phys%srflag = +99999.9
+      mn_phys%snodl  = +99999.9
+      mn_phys%weasdl = +99999.9
+      mn_phys%snodi  = +99999.9
+      mn_phys%weasdi = +99999.9
+
     endif
 
   end subroutine allocate_fv_moving_nest_physics_type
@@ -927,8 +949,9 @@ contains
 
       deallocate( mn_phys%zorl )
       deallocate( mn_phys%zorll )
-      deallocate( mn_phys%zorlwav )
+      deallocate( mn_phys%zorli )
       deallocate( mn_phys%zorlw )
+      deallocate( mn_phys%zorlwav )
 
       deallocate( mn_phys%usfco )
       deallocate( mn_phys%vsfco )
@@ -1035,6 +1058,12 @@ contains
       deallocate ( mn_phys%sncovr )
       deallocate ( mn_phys%fice )
       deallocate ( mn_phys%hice )
+
+      deallocate ( mn_phys%srflag )
+      deallocate ( mn_phys%snodl )
+      deallocate ( mn_phys%weasdl )
+      deallocate ( mn_phys%snodi )
+      deallocate ( mn_phys%weasdi )
 
     endif
 
