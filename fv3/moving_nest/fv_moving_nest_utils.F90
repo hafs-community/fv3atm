@@ -2277,104 +2277,36 @@ contains
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
-
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-          x(i,j) = 0.0
-          tw = 0.0
-          num_weights = 0
-
-! WDR Original -- seems like the wt values should range from 1-4, not all use wt(i,j,1)
-!  will likely alter land values of shifted physics fields in regression tests.
-!  old values were (slightly) incorrect -- averaged of the 4 nearby points instead of actual weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,1)
-
-! Intermediate: Corrected the weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,2)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,3)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,4)
-
-!          print '("[INFO] MASK2D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-          !if (this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK2D SNOWXY npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-
-          ! Note that weights don't seem to always be exactly 0.0 when the corner points are aligned
-          ! Use the land sea mask to choose which points to add to weight and buffer
-          if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. 0.0001 ) then
-            num_weights = num_weights + 1
-            x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-            tw = tw + wt(i,j,1)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
-
-          endif
-
-          if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. 0.0001) then
-            num_weights = num_weights + 2
-            x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-            tw = tw + wt(i,j,2)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
-          endif
-
-          if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
-            num_weights = num_weights + 4
-            x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-            tw = tw + wt(i,j,3)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
-          endif
-
-          if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
-            num_weights = num_weights + 8
-            x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-            tw = tw + wt(i,j,4)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
-
-          endif
-
+          ! Initialize with missing value
+          x(i,j) = missing_val
+          ! Search if same mask
           if (mask_var(i,j) .eq. mask_val) then
-            if (tw .gt. 0.0) then
-              x(i,j) = x(i,j) / tw
-            else
-              x(i,j) = default_val
+            ic = ind(i,j,1)
+            jc = ind(i,j,2)
+            ! Set default value
+            x(i,j) = default_val
+            tw = -1.0
+            ! Searching order: 1, 2, 4, 3
+            if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+              tw = wt(i,j,1)
+              x(i,j) = buffer(ic,jc)
             endif
-          else
-            x(i,j) = missing_val
+            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+              tw = wt(i,j,2)
+              x(i,j) = buffer(ic,jc+1)
+            endif
+            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+              tw = wt(i,j,4)
+              x(i,j) = buffer(ic+1,jc)
+            endif
+            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+              tw = wt(i,j,3)
+              x(i,j) = buffer(ic+1,jc+1)
+            endif
           endif
-
-          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_const npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
-
         enddo
       enddo
     endif
-
-!    if (.not. isnan(dummy_val)) print '("[INFO] WDR fill_nest_from_buffer_cell_center_masked npe=",I0," num_reset=",I0," var=",A12," mask_var=",F10.4," dummy_val=",F14.4," ",E15.8)', mpp_pe(), num_reset, trim(var_name), dummy_mask, dummy_val, dummy_val
 
   end subroutine fill_nest_from_buffer_cell_center_masked_2d_const
 
@@ -2423,95 +2355,34 @@ contains
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
 
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-          x(i,j) = 0.0
-          tw = 0.0
-          num_weights = 0
-
-! WDR Original -- seems like the wt values should range from 1-4, not all use wt(i,j,1)
-!  will likely alter land values of shifted physics fields in regression tests.
-!  old values were (slightly) incorrect -- averaged of the 4 nearby points instead of actual weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,1)
-
-! Intermediate: Corrected the weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,2)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,3)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,4)
-
-!          print '("[INFO] MASK2D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-          ! Note that weights don't seem to always be exactly 0.0 when the corner points are aligned
-          ! Use the land sea mask to choose which points to add to weight and buffer
-          if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. 0.0001 ) then
-            num_weights = num_weights + 1
-            x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-            tw = tw + wt(i,j,1)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
-
-          endif
-
-          if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. 0.0001) then
-            num_weights = num_weights + 2
-            x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-            tw = tw + wt(i,j,2)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
-          endif
-
-          if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
-            num_weights = num_weights + 4
-            x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-            tw = tw + wt(i,j,3)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
-          endif
-
-          if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
-            num_weights = num_weights + 8
-            x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-            tw = tw + wt(i,j,4)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
-
-          endif
-
+          ! Initialize with missing value
+          x(i,j) = missing_grid(i,j)
+          ! Search if same mask
           if (mask_var(i,j) .eq. mask_val) then
-            if (tw .gt. 0.0) then
-              x(i,j) = x(i,j) / tw
-            else
-              x(i,j) = default_grid(i,j)
+            ic = ind(i,j,1)
+            jc = ind(i,j,2)
+            ! Set default value
+            x(i,j) = default_grid(i,j)
+            tw = -1.0
+            ! Searching order: 1, 2, 4, 3
+
+            if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+              tw = wt(i,j,1)
+              x(i,j) = buffer(ic,jc)
             endif
-          else
-            x(i,j) = missing_grid(i,j)
+            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+              tw = wt(i,j,2)
+              x(i,j) = buffer(ic,jc+1)
+            endif
+            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+              tw = wt(i,j,4)
+              x(i,j) = buffer(ic+1,jc)
+            endif
+            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+              tw = wt(i,j,3)
+              x(i,j) = buffer(ic+1,jc+1)
+            endif
           endif
-
-          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_2d npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
-
         enddo
       enddo
     endif
@@ -2560,53 +2431,34 @@ contains
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
 
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-
           do k=lbound(x,3), ubound(x,3)
-            x(i,j,k) = 0.0
-            tw = 0.0
 
-!            print '("[INFO] MASK3D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-            ! Use the land sea mask to choose which points to add to weight and buffer
-            if (parent_mask_var(ic,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,1)*buffer(ic,  jc ,k)
-              tw = tw + wt(i,j,1)
-            endif
-
-            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,2)*buffer(ic,  jc+1,k)
-              tw = tw + wt(i,j,2)
-            endif
-
-            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,3)*buffer(ic+1,jc+1,k)
-              tw = tw + wt(i,j,3)
-            endif
-
-            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,4)*buffer(ic+1,jc ,k)
-              tw = tw + wt(i,j,4)
-            endif
-
+            ! Initialize with missing value
+            x(i,j,k) = missing_vector(k)
+            ! Search if same mask
             if (mask_var(i,j) .eq. mask_val) then
-              if (tw .gt. 0.0) then
-                x(i,j,k) = x(i,j,k) / tw
-              else
-                x(i,j,k) = default_vector(k)
+              ic = ind(i,j,1)
+              jc = ind(i,j,2)
+              ! Set default value
+              x(i,j,k) = default_vector(k)
+              tw = -1.0
+              ! Searching order: 1, 2, 4, 3
+              if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+                tw = wt(i,j,1)
+                x(i,j,k) = buffer(ic,jc,k)
               endif
-            else
-              x(i,j,k) = missing_vector(k)
+              if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+                tw = wt(i,j,2)
+                x(i,j,k) = buffer(ic,jc+1,k)
+              endif
+              if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+                tw = wt(i,j,4)
+                x(i,j,k) = buffer(ic+1,jc,k)
+              endif
+              if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+                tw = wt(i,j,3)
+                x(i,j,k) = buffer(ic+1,jc+1,k)
+              endif
             endif
 
           enddo
@@ -2663,51 +2515,34 @@ contains
 
           ic = ind(i,j,1)
           jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-
           do k=lbound(x,3), ubound(x,3)
-            x(i,j,k) = 0.0
-            tw = 0.0
 
-!            print '("[INFO] MASK3D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-            ! Use the land sea mask to choose which points to add to weight and buffer
-            if (parent_mask_var(ic,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,1)*buffer(ic,  jc ,k)
-              tw = tw + wt(i,j,1)
-            endif
-
-            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,2)*buffer(ic,  jc+1,k)
-              tw = tw + wt(i,j,2)
-            endif
-
-            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,3)*buffer(ic+1,jc+1,k)
-              tw = tw + wt(i,j,3)
-            endif
-
-            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,4)*buffer(ic+1,jc ,k)
-              tw = tw + wt(i,j,4)
-            endif
-
+            ! Initialize with missing value
+            x(i,j,k) = missing_grid(i,j)
+            ! Search if same mask
             if (mask_var(i,j) .eq. mask_val) then
-              if (tw .gt. 0.0) then
-                x(i,j,k) = x(i,j,k) / tw
-              else
-                x(i,j,k) = default_grid(i,j)
+              ic = ind(i,j,1)
+              jc = ind(i,j,2)
+              ! Set default value
+              x(i,j,k) = default_grid(i,j)
+              tw = -1.0
+              ! Searching order: 1, 2, 4, 3
+              if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+                tw = wt(i,j,1)
+                x(i,j,k) = buffer(ic,jc,k)
               endif
-            else
-              x(i,j,k) = missing_grid(i,j)
+              if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+                tw = wt(i,j,2)
+                x(i,j,k) = buffer(ic,jc+1,k)
+              endif
+              if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+                tw = wt(i,j,4)
+                x(i,j,k) = buffer(ic+1,jc,k)
+              endif
+              if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+                tw = wt(i,j,3)
+                x(i,j,k) = buffer(ic+1,jc+1,k)
+              endif
             endif
 
           enddo
