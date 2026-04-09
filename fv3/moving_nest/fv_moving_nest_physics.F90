@@ -832,15 +832,15 @@ contains
               GFS_sfcprop%smoiseq(im,k) = mn_phys%smoiseq(i,j,k)
             enddo
 
-          ! do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
-          !   GFS_sfcprop%snicexy(im,k) = mn_phys%snicexy(i,j,k)
-          !   GFS_sfcprop%snliqxy(im,k) = mn_phys%snliqxy(i,j,k)
-          !   GFS_sfcprop%tsnoxy(im,k)  = mn_phys%tsnoxy(i,j,k)
-          ! enddo
+           do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
+             GFS_sfcprop%snicexy(im,k) = mn_phys%snicexy(i,j,k)
+             GFS_sfcprop%snliqxy(im,k) = mn_phys%snliqxy(i,j,k)
+             GFS_sfcprop%tsnoxy(im,k)  = mn_phys%tsnoxy(i,j,k)
+           enddo
 
-          ! do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsoil
-          !   GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
-          ! enddo
+           do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsoil
+             GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
+           enddo
 
             GFS_sfcprop%scolor(im)     = nint(mn_phys%soilcolor(i,j)) ! scolor is integer
             GFS_sfcprop%tgxy(im)       = mn_phys%tgxy(i,j)
@@ -876,23 +876,23 @@ contains
 
             ! Vegetation variables: perform some bounds checks in case nest vegetated grids inherit from non-veg parent
 
-            if (mn_phys%leading_edge(i,j) ) then
-              GFS_sfcprop%tvxy(im)     = min(max(mn_phys%tvxy(i,j) ,mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
-              GFS_sfcprop%tahxy(im)    = min(max(mn_phys%tahxy(i,j),mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
-              GFS_sfcprop%fwetxy(im)   = min(max(mn_phys%fwetxy(i,j),0.0),1.0)
-              GFS_sfcprop%canicexy(im) = min(max(mn_phys%canicexy(i,j),0.0),100.0)
-              GFS_sfcprop%canliqxy(im) = min(max(mn_phys%canliqxy(i,j),0.0),100.0)
-              GFS_sfcprop%eahxy(im)    = min(max(mn_phys%eahxy(i,j),500.0),4000.0)
-            else
+!            if (mn_phys%leading_edge(i,j) ) then
+!              GFS_sfcprop%tvxy(im)     = min(max(mn_phys%tvxy(i,j) ,mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
+!              GFS_sfcprop%tahxy(im)    = min(max(mn_phys%tahxy(i,j),mn_phys%tsfc(i,j)-5.0),mn_phys%tsfc(i,j)+5.0)
+!              GFS_sfcprop%fwetxy(im)   = min(max(mn_phys%fwetxy(i,j),0.0),1.0)
+!              GFS_sfcprop%canicexy(im) = min(max(mn_phys%canicexy(i,j),0.0),100.0)
+!              GFS_sfcprop%canliqxy(im) = min(max(mn_phys%canliqxy(i,j),0.0),100.0)
+!              GFS_sfcprop%eahxy(im)    = min(max(mn_phys%eahxy(i,j),500.0),4000.0)
+!            else
               GFS_sfcprop%tvxy(im)     = mn_phys%tvxy(i,j)
               GFS_sfcprop%tahxy(im)    = mn_phys%tahxy(i,j)
               GFS_sfcprop%fwetxy(im)   = mn_phys%fwetxy(i,j)
               GFS_sfcprop%canicexy(im) = mn_phys%canicexy(i,j)
               GFS_sfcprop%canliqxy(im) = mn_phys%canliqxy(i,j)
               GFS_sfcprop%eahxy(im)    = mn_phys%eahxy(i,j)
-            endif
+!            endif
 
-            if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) /= 0.0) then
+            if (GFS_sfcprop%snowd(im) == 0.0 .and. GFS_sfcprop%weasd(im) >= 0.0) then
               GFS_sfcprop%snowd(im) = GFS_sfcprop%weasd(im)/10.0
             endif
 
@@ -930,172 +930,172 @@ contains
 
             if (nint(GFS_sfcprop%slmsk(im)) .eq. M_LAND) then
 
-            do k = 1, GFS_control%lsoil
-              GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
-              GFS_sfcprop%slc(im,k) = min(GFS_sfcprop%slc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
-            enddo
-
-            if (GFS_sfcprop%vtype(im) == 15) then ! glacier
-              do k = 1,GFS_control%lsoil
-                GFS_sfcprop%stc(im,k) = min(mn_phys%stc(i,j,k), min(GFS_Sfcprop%tg3(im), 263.15))
-                GFS_sfcprop%smc(im,k) = 1.0
-                GFS_sfcprop%slc(im,k) = 0.0
-              enddo
-              GFS_sfcprop%weasd(im) = 600.0   ! 600mm SWE for glacier
-              GFS_sfcprop%snowd(im) = 2000.0  ! 2m snow depth for glacier, snowd/snwdph is in mm
-            endif
-
-            if (mn_phys%leading_edge(i,j) == .True. .and. GFS_sfcprop%snowd(im) < 99999.0) then ! new land with snow
-              if (GFS_sfcprop%snowd(im)/1000.0 < 0.025) then
-                GFS_sfcprop%snowxy(im) = 0.0
-                dzsno(-2:0) = 0.0
-              elseif (GFS_sfcprop%snowd(im)/1000.0 >= 0.025 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.05) then
-                GFS_sfcprop%snowxy(im) = -1.0
-                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0
-              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.05 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.10) then
-                GFS_sfcprop%snowxy(im) = -2.0
-                dzsno(-1) = 0.5*GFS_sfcprop%snowd(im)/1000.0
-                dzsno(0) = 0.5*GFS_sfcprop%snowd(im)/1000.0
-              elseif (GFS_sfcprop%snowd(im)/1000.0> 0.10 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.25) then
-                GFS_sfcprop%snowxy(im) = -2.0
-                dzsno(-1) = 0.05
-                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0 - 0.05
-              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.25 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.45) then
-                GFS_sfcprop%snowxy(im) = -3.0
-                dzsno(-2) = 0.05
-                dzsno(-1) = 0.5*(GFS_sfcprop%snowd(im)/1000.0-0.05)
-                dzsno(0) = 0.5*(GFS_sfcprop%snowd(im)/1000.0-0.05)
-              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.45) then
-                GFS_sfcprop%snowxy(im) = -3.0
-                dzsno(-2) = 0.05
-                dzsno(-1) = 0.20
-                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0 - 0.05 - 0.20
-              else
-                write(*,*)  'Error in fv_moving_nest_physics.F90 - Problem with the logic assigning snow layers'
-                stop
-              endif
-              isnow = nint(GFS_sfcprop%snowxy(im)) + 1
-              do k = isnow, GFS_control%lsnow_lsm_ubound
-                GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + ( (sum(dzsno(isnow:k))-0.5*dzsno(k)) / \
-                                           GFS_sfcprop%snowd(im)/1000.0 ) * (GFS_sfcprop%stc(im,1)-GFS_sfcprop%tgxy(im))
-                GFS_sfcprop%snliqxy(im,k) = 0.0
-                GFS_sfcprop%snicexy(im,k) = 1.0 * dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
-              enddo
-              do k = isnow,GFS_control%lsnow_lsm_ubound
-                dzsnso(k) = -dzsno(k)
-              enddo
               do k = 1, GFS_control%lsoil
-                dzsnso(k) = -dzs(k)
+                GFS_sfcprop%smc(im,k) = min(GFS_sfcprop%smc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
+                GFS_sfcprop%slc(im,k) = min(GFS_sfcprop%slc(im,k),porosity(GFS_sfcprop%stype(im))-0.01)
               enddo
-              GFS_sfcprop%zsnsoxy(im,isnow) = dzsnso(isnow)
-
-              do k = isnow + 1, GFS_control%lsoil
-                GFS_sfcprop%zsnsoxy(im, k) = GFS_sfcprop%zsnsoxy(im,k-1) + dzsnso(k)
-              enddo
-            else ! internal moving land points
-              GFS_sfcprop%snowxy(im) = mn_phys%snowxy(i,j)
-              isnow = nint(GFS_sfcprop%snowxy(im)) + 1
-              if (abs(isnow) < GFS_control%lsoil) then ! only isnow /= fill value
-                do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
-                  GFS_sfcprop%snicexy(im,k) = mn_phys%snicexy(i,j,k)
-                  GFS_sfcprop%snliqxy(im,k) = mn_phys%snliqxy(i,j,k)
-                  GFS_sfcprop%tsnoxy(im,k)  = mn_phys%tsnoxy(i,j,k)
+  
+              if (GFS_sfcprop%vtype(im) == 15) then ! glacier
+                do k = 1,GFS_control%lsoil
+                  GFS_sfcprop%stc(im,k) = min(mn_phys%stc(i,j,k), min(GFS_Sfcprop%tg3(im), 263.15))
+                  GFS_sfcprop%smc(im,k) = 1.0
+                  GFS_sfcprop%slc(im,k) = 0.0
                 enddo
-                do k = isnow, GFS_control%lsoil
-                  GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
-                enddo
+                GFS_sfcprop%weasd(im) = 600.0   ! 600mm SWE for glacier
+                GFS_sfcprop%snowd(im) = 2000.0  ! 2m snow depth for glacier, snowd/snwdph is in mm
               endif
-              ! reset snow-related fields over the old glacier points to be consistent with the new glacier land points
-              ! for the next iteration
-              if (GFS_sfcprop%vtype(im) == 15) then
-                GFS_sfcprop%snowxy(im) = -3.0
-                dzsno(-2) = 0.05
-                dzsno(-1) = 0.20
-                dzsno(0) = 2.0 - 0.05 - 0.20
-                isnow = -2
-                do k = isnow, GFS_control%lsnow_lsm_ubound
-                  GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + ( (sum(dzsno(isnow:k))-0.5*dzsno(k)) / \
-                                             GFS_sfcprop%snowd(im)/1000.0 ) * (GFS_sfcprop%stc(im,1)-GFS_sfcprop%tgxy(im))
-                  GFS_sfcprop%snliqxy(im,k) = 0.0
-                  GFS_sfcprop%snicexy(im,k) = 1.0 * dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
-                enddo
-                do k = isnow, GFS_control%lsnow_lsm_ubound
-                  dzsnso(k) = -dzsno(k)
-                enddo
-                do k = 1, GFS_control%lsoil
-                  dzsnso(k) = -dzs(k)
-                enddo
-                GFS_sfcprop%zsnsoxy(im,isnow) = dzsnso(isnow)
-                do k = isnow + 1, GFS_control%lsoil
-                  GFS_sfcprop%zsnsoxy(im, k) = GFS_sfcprop%zsnsoxy(im,k-1) + dzsnso(k)
-                enddo
-              endif
-            endif
+  
+  !            if (mn_phys%leading_edge(i,j) == .True. .and. GFS_sfcprop%snowd(im) < 99999.0) then ! new land with snow
+  !              if (GFS_sfcprop%snowd(im)/1000.0 < 0.025) then
+  !                GFS_sfcprop%snowxy(im) = 0.0
+  !                dzsno(-2:0) = 0.0
+  !              elseif (GFS_sfcprop%snowd(im)/1000.0 >= 0.025 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.05) then
+  !                GFS_sfcprop%snowxy(im) = -1.0
+  !                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0
+  !              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.05 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.10) then
+  !                GFS_sfcprop%snowxy(im) = -2.0
+  !                dzsno(-1) = 0.5*GFS_sfcprop%snowd(im)/1000.0
+  !                dzsno(0) = 0.5*GFS_sfcprop%snowd(im)/1000.0
+  !              elseif (GFS_sfcprop%snowd(im)/1000.0> 0.10 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.25) then
+  !                GFS_sfcprop%snowxy(im) = -2.0
+  !                dzsno(-1) = 0.05
+  !                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0 - 0.05
+  !              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.25 .and. GFS_sfcprop%snowd(im)/1000.0 <= 0.45) then
+  !                GFS_sfcprop%snowxy(im) = -3.0
+  !                dzsno(-2) = 0.05
+  !                dzsno(-1) = 0.5*(GFS_sfcprop%snowd(im)/1000.0-0.05)
+  !                dzsno(0) = 0.5*(GFS_sfcprop%snowd(im)/1000.0-0.05)
+  !              elseif (GFS_sfcprop%snowd(im)/1000.0 > 0.45) then
+  !                GFS_sfcprop%snowxy(im) = -3.0
+  !                dzsno(-2) = 0.05
+  !                dzsno(-1) = 0.20
+  !                dzsno(0) = GFS_sfcprop%snowd(im)/1000.0 - 0.05 - 0.20
+  !              else
+  !                write(*,*)  'Error in fv_moving_nest_physics.F90 - Problem with the logic assigning snow layers'
+  !                stop
+  !              endif
+  !              isnow = nint(GFS_sfcprop%snowxy(im)) + 1
+  !              do k = isnow, GFS_control%lsnow_lsm_ubound
+  !                GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + ( (sum(dzsno(isnow:k))-0.5*dzsno(k)) / \
+  !                                           GFS_sfcprop%snowd(im)/1000.0 ) * (GFS_sfcprop%stc(im,1)-GFS_sfcprop%tgxy(im))
+  !                GFS_sfcprop%snliqxy(im,k) = 0.0
+  !                GFS_sfcprop%snicexy(im,k) = 1.0 * dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
+  !              enddo
+  !              do k = isnow,GFS_control%lsnow_lsm_ubound
+  !                dzsnso(k) = -dzsno(k)
+  !              enddo
+  !              do k = 1, GFS_control%lsoil
+  !                dzsnso(k) = -dzs(k)
+  !              enddo
+  !              GFS_sfcprop%zsnsoxy(im,isnow) = dzsnso(isnow)
+  !
+  !              do k = isnow + 1, GFS_control%lsoil
+  !                GFS_sfcprop%zsnsoxy(im, k) = GFS_sfcprop%zsnsoxy(im,k-1) + dzsnso(k)
+  !              enddo
+  !            else ! internal moving land points
+               GFS_sfcprop%snowxy(im) = mn_phys%snowxy(i,j)
+               isnow = nint(GFS_sfcprop%snowxy(im)) + 1
+               if (abs(isnow) < GFS_control%lsoil) then ! only isnow /= fill value
+                 do k = GFS_control%lsnow_lsm_lbound, GFS_control%lsnow_lsm_ubound
+                   GFS_sfcprop%snicexy(im,k) = mn_phys%snicexy(i,j,k)
+                   GFS_sfcprop%snliqxy(im,k) = mn_phys%snliqxy(i,j,k)
+                   GFS_sfcprop%tsnoxy(im,k)  = mn_phys%tsnoxy(i,j,k)
+                 enddo
+                 do k = isnow, GFS_control%lsoil
+                   GFS_sfcprop%zsnsoxy(im,k) = mn_phys%zsnsoxy(i,j,k)
+                 enddo
+               endif
+               ! reset snow-related fields over the old glacier points to be consistent with the new glacier land points
+               ! for the next iteration
+               if (GFS_sfcprop%vtype(im) == 15) then
+                 GFS_sfcprop%snowxy(im) = -3.0
+                 dzsno(-2) = 0.05
+                 dzsno(-1) = 0.20
+                 dzsno(0) = 2.0 - 0.05 - 0.20
+                 isnow = -2
+                 do k = isnow, GFS_control%lsnow_lsm_ubound
+                   GFS_sfcprop%tsnoxy(im,k) = GFS_sfcprop%tgxy(im) + ( (sum(dzsno(isnow:k))-0.5*dzsno(k)) / \
+                                              GFS_sfcprop%snowd(im)/1000.0 ) * (GFS_sfcprop%stc(im,1)-GFS_sfcprop%tgxy(im))
+                   GFS_sfcprop%snliqxy(im,k) = 0.0
+                   GFS_sfcprop%snicexy(im,k) = 1.0 * dzsno(k) * GFS_sfcprop%weasd(im)/GFS_sfcprop%snowd(im)
+                 enddo
+                 do k = isnow, GFS_control%lsnow_lsm_ubound
+                   dzsnso(k) = -dzsno(k)
+                 enddo
+                 do k = 1, GFS_control%lsoil
+                   dzsnso(k) = -dzs(k)
+                 enddo
+                 GFS_sfcprop%zsnsoxy(im,isnow) = dzsnso(isnow)
+                 do k = isnow + 1, GFS_control%lsoil
+                   GFS_sfcprop%zsnsoxy(im, k) = GFS_sfcprop%zsnsoxy(im,k-1) + dzsnso(k)
+                 enddo
+               endif 
+  !            endif !leadingedge
 
             else ! Reset variables for non land points
 
-            GFS_sfcprop%smoiseq(im,:)  = FP20
-            GFS_sfcprop%snicexy(im,:)  = FP20
-            GFS_sfcprop%snliqxy(im,:)  = FP20
-            GFS_sfcprop%tsnoxy(im,:)   = FP20
-            GFS_sfcprop%zsnsoxy(im,:)  = FP20
-
-            GFS_sfcprop%scolor(im)     = 0        ! scolor is integer
-            GFS_sfcprop%tgxy(im)       = FP20
-            GFS_sfcprop%cmxy(im)       = FP20
-            GFS_sfcprop%chxy(im)       = FP20
-            GFS_sfcprop%sneqvoxy(im)   = FP20
-            GFS_sfcprop%alboldxy(im)   = FP20
-            GFS_sfcprop%qsnowxy(im)    = FP20
-            GFS_sfcprop%wslakexy(im)   = FP20
-            GFS_sfcprop%zwtxy(im)      = FP20
-            GFS_sfcprop%waxy(im)       = FP20
-            GFS_sfcprop%wtxy(im)       = FP20
-            GFS_sfcprop%lfmassxy(im)   = FP20
-            GFS_sfcprop%rtmassxy(im)   = FP20
-            GFS_sfcprop%stmassxy(im)   = FP20
-            GFS_sfcprop%woodxy(im)     = FP20
-            GFS_sfcprop%stblcpxy(im)   = FP20
-            GFS_sfcprop%fastcpxy(im)   = FP20
-            GFS_sfcprop%xsaixy(im)     = FP20
-            GFS_sfcprop%xlaixy(im)     = FP20
-            GFS_sfcprop%taussxy(im)    = FP20
-            GFS_sfcprop%smcwtdxy(im)   = FP20
-            GFS_sfcprop%deeprechxy(im) = FP20
-            GFS_sfcprop%rechxy(im)     = FP20
-            GFS_sfcprop%tvxy(im)       = FP20
-            GFS_sfcprop%tahxy(im)      = FP20
-            GFS_sfcprop%fwetxy(im)     = FP20
-            GFS_sfcprop%canicexy(im)   = FP20
-            GFS_sfcprop%canliqxy(im)   = FP20
-            GFS_sfcprop%eahxy(im)      = FP20
-            GFS_sfcprop%snowxy(im)     = FP20
-            GFS_sfcprop%snowd(im)      = 0.
-            GFS_sfcprop%weasd(im)      = 0.
-            GFS_sfcprop%sncovr(im)     = 0.
-
-            GFS_sfcprop%snodl(im)      = FN20
-            GFS_sfcprop%weasdl(im)     = FN20
+              GFS_sfcprop%smoiseq(im,:)  = FP20
+              GFS_sfcprop%snicexy(im,:)  = FP20
+              GFS_sfcprop%snliqxy(im,:)  = FP20
+              GFS_sfcprop%tsnoxy(im,:)   = FP20
+              GFS_sfcprop%zsnsoxy(im,:)  = FP20
+  
+              GFS_sfcprop%scolor(im)     = 0        ! scolor is integer
+              GFS_sfcprop%tgxy(im)       = FP20
+              GFS_sfcprop%cmxy(im)       = FP20
+              GFS_sfcprop%chxy(im)       = FP20
+              GFS_sfcprop%sneqvoxy(im)   = FP20
+              GFS_sfcprop%alboldxy(im)   = FP20
+              GFS_sfcprop%qsnowxy(im)    = FP20
+              GFS_sfcprop%wslakexy(im)   = FP20
+              GFS_sfcprop%zwtxy(im)      = FP20
+              GFS_sfcprop%waxy(im)       = FP20
+              GFS_sfcprop%wtxy(im)       = FP20
+              GFS_sfcprop%lfmassxy(im)   = FP20
+              GFS_sfcprop%rtmassxy(im)   = FP20
+              GFS_sfcprop%stmassxy(im)   = FP20
+              GFS_sfcprop%woodxy(im)     = FP20
+              GFS_sfcprop%stblcpxy(im)   = FP20
+              GFS_sfcprop%fastcpxy(im)   = FP20
+              GFS_sfcprop%xsaixy(im)     = FP20
+              GFS_sfcprop%xlaixy(im)     = FP20
+              GFS_sfcprop%taussxy(im)    = FP20
+              GFS_sfcprop%smcwtdxy(im)   = FP20
+              GFS_sfcprop%deeprechxy(im) = FP20
+              GFS_sfcprop%rechxy(im)     = FP20
+              GFS_sfcprop%tvxy(im)       = FP20
+              GFS_sfcprop%tahxy(im)      = FP20
+              GFS_sfcprop%fwetxy(im)     = FP20
+              GFS_sfcprop%canicexy(im)   = FP20
+              GFS_sfcprop%canliqxy(im)   = FP20
+              GFS_sfcprop%eahxy(im)      = FP20
+              GFS_sfcprop%snowxy(im)     = FP20
+              GFS_sfcprop%snowd(im)      = 0.
+              GFS_sfcprop%weasd(im)      = 0.
+              GFS_sfcprop%sncovr(im)     = 0.
+  
+              GFS_sfcprop%snodl(im)      = FN20
+              GFS_sfcprop%weasdl(im)     = FN20
 
             endif ! if (nint(GFS_sfcprop%slmsk(im)) .eq. M_LAND) then
 
           endif ! if (GFS_control%lsm == GFS_control%lsm_noahmp) then
-
-          ! Check if stype and vtype are properly set for land points. Set to reasonable values if they have fill values.
-          if ( (nint(GFS_sfcprop%slmsk(im)) .eq. M_LAND) ) then
-            if (GFS_sfcprop%vtype(im) .lt. 0.5) then
-              GFS_sfcprop%vtype(im) = 7    ! Force to grassland
-            endif
-            if (GFS_sfcprop%stype(im) .lt. 0.5) then
-              GFS_sfcprop%stype(im) = 3    ! Force to sandy loam
-            endif
-            if (GFS_sfcprop%vtype_save(im) .lt. 0.5) then
-              GFS_sfcprop%vtype_save(im) = 7    ! Force to grassland
-            endif
-            if (GFS_sfcprop%stype_save(im) .lt. 0.5) then
-              GFS_sfcprop%stype_save(im) = 3    ! Force to sandy loam
-            endif
-          endif
+!
+!          ! Check if stype and vtype are properly set for land points. Set to reasonable values if they have fill values.
+!          if ( (nint(GFS_sfcprop%slmsk(im)) .eq. M_LAND) ) then
+!            if (GFS_sfcprop%vtype(im) .lt. 0.5) then
+!              GFS_sfcprop%vtype(im) = 7    ! Force to grassland
+!            endif
+!            if (GFS_sfcprop%stype(im) .lt. 0.5) then
+!              GFS_sfcprop%stype(im) = 3    ! Force to sandy loam
+!            endif
+!            if (GFS_sfcprop%vtype_save(im) .lt. 0.5) then
+!              GFS_sfcprop%vtype_save(im) = 7    ! Force to grassland
+!            endif
+!            if (GFS_sfcprop%stype_save(im) .lt. 0.5) then
+!              GFS_sfcprop%stype_save(im) = 3    ! Force to sandy loam
+!            endif
+!          endif
         enddo
       enddo
     endif
