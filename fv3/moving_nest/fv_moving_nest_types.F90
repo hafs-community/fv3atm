@@ -126,8 +126,6 @@ module fv_moving_nest_types_mod
     real, allocatable  :: alnwf_grid(:,:)              _NULL  ! Near IR white sky albedo; netCDF file has monthly values
   end type mn_fix_grids
 
-
-
   ! TODO deallocate these at end of model run.  They are only allocated once, at first nest move, inside mn_static_read_hires().
   !  Note these are only 32 bits for now; matching the precision of the input netCDF files
   !  though the model generally handles physics variables with 64 bit precision
@@ -188,7 +186,7 @@ module fv_moving_nest_types_mod
 
     real (kind=kind_phys), _ALLOCATABLE :: zorl (:,:)       _NULL   !< roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorll (:,:)      _NULL   !< land roughness length
-    !real (kind=kind_phys), _ALLOCATABLE :: zorli (:,:)     _NULL   !< ice surface roughness length ! TODO do we need this?
+    real (kind=kind_phys), _ALLOCATABLE :: zorli (:,:)      _NULL   !< ice surface roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorlw (:,:)      _NULL   !< wave surface roughness length
     real (kind=kind_phys), _ALLOCATABLE :: zorlwav (:,:)    _NULL   !< wave surface roughness in cm derived from wave model
 
@@ -309,6 +307,11 @@ module fv_moving_nest_types_mod
     real (kind=kind_phys), _ALLOCATABLE :: fice (:,:)       _NULL   !< sea ice fraction
     real (kind=kind_phys), _ALLOCATABLE :: hice (:,:)       _NULL   !< sea ice thickness
 
+    real (kind=kind_phys), _ALLOCATABLE ::srflag (:,:)      _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::snodl (:,:)       _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::weasdl (:,:)      _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::snodi (:,:)       _NULL
+    real (kind=kind_phys), _ALLOCATABLE ::weasdi (:,:)      _NULL
 
   end type fv_moving_nest_physics_type
 
@@ -360,7 +363,6 @@ module fv_moving_nest_types_mod
     module procedure mn_overwrite_with_nest_init_values_r8
   end interface mn_overwrite_with_nest_init_values
 
-
 contains
 
   subroutine mn_set_leading_edge(mn_phys, isd, ied, jsd, jed, ioffset, joffset)
@@ -389,7 +391,6 @@ contains
     if (joffset .eq. -1) then
       mn_phys%leading_edge(:, jed-5:jed-3) = .True.
     endif
-
 
   end subroutine mn_set_leading_edge
 
@@ -483,7 +484,6 @@ contains
 
   end subroutine deallocate_fv_moving_nest
 
-
   subroutine mn_apply_lakes(land_mask_grids)
     type(mn_land_mask_grids), intent(inout) :: land_mask_grids
 
@@ -561,8 +561,6 @@ contains
     if (allocated(land_mask_grids%geolon_grid))    deallocate(land_mask_grids%geolon_grid)
   end subroutine deallocate_land_mask_grids
 
-
-
   subroutine alloc_set_facwf(fix_grids)
     type(mn_fix_grids), intent(inout) :: fix_grids
 
@@ -583,8 +581,6 @@ contains
       enddo
     enddo
   end subroutine alloc_set_facwf
-
-
 
   subroutine mn_static_overwrite_ls_from_nest(fp_ls, nest_ls, refine, ioffset, joffset)
     type(mn_land_mask_grids), intent(inout) :: fp_ls
@@ -641,13 +637,7 @@ contains
 
   end subroutine deallocate_fix_grids
 
-
-
-
-
-
-
-  subroutine  allocate_fv_moving_nest_prog_type(isd, ied, jsd, jed, npz, mn_prog)
+  subroutine allocate_fv_moving_nest_prog_type(isd, ied, jsd, jed, npz, mn_prog)
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
     type(fv_moving_nest_prog_type), intent(inout) :: mn_prog
 
@@ -660,14 +650,14 @@ contains
 
   end subroutine allocate_fv_moving_nest_prog_type
 
-  subroutine  deallocate_fv_moving_nest_prog_type(mn_prog)
+  subroutine deallocate_fv_moving_nest_prog_type(mn_prog)
     type(fv_moving_nest_prog_type), intent(inout) :: mn_prog
 
     if (allocated(mn_prog%delz)) deallocate(mn_prog%delz)
 
   end subroutine deallocate_fv_moving_nest_prog_type
 
-  subroutine  allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_noahmp, move_nsst, lsnow_lbound, lsnow_ubound, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
+  subroutine allocate_fv_moving_nest_physics_type(isd, ied, jsd, jed, npz, move_physics, move_noahmp, move_nsst, lsnow_lbound, lsnow_ubound, lsoil, nmtvr, levs, ntot2d, ntot3d, mn_phys)
     integer, intent(in)                           :: isd, ied, jsd, jed, npz
     logical, intent(in)                           :: move_physics, move_noahmp, move_nsst
     integer, intent(in)                           :: lsnow_lbound, lsnow_ubound, lsoil, nmtvr, levs, ntot2d, ntot3d    ! From GFS_control
@@ -709,8 +699,9 @@ contains
 
       allocate ( mn_phys%zorl(isd:ied, jsd:jed) )
       allocate ( mn_phys%zorll(isd:ied, jsd:jed) )
-      allocate ( mn_phys%zorlwav(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zorli(isd:ied, jsd:jed) )
       allocate ( mn_phys%zorlw(isd:ied, jsd:jed) )
+      allocate ( mn_phys%zorlwav(isd:ied, jsd:jed) )
 
       allocate ( mn_phys%usfco(isd:ied, jsd:jed) )
       allocate ( mn_phys%vsfco(isd:ied, jsd:jed) )
@@ -818,6 +809,13 @@ contains
       allocate ( mn_phys%hice(isd:ied, jsd:jed) )
 
       !allocate ( mn_phys%ustar1(isd:ied, jsd:jed) )
+
+      allocate ( mn_phys%srflag(isd:ied, jsd:jed) )
+      allocate ( mn_phys%snodl(isd:ied, jsd:jed) )
+      allocate ( mn_phys%weasdl(isd:ied, jsd:jed) )
+      allocate ( mn_phys%snodi(isd:ied, jsd:jed) )
+      allocate ( mn_phys%weasdi(isd:ied, jsd:jed) )
+
     endif
 
     mn_phys%ts = +99999.9
@@ -828,7 +826,6 @@ contains
       mn_phys%smc = +99999.9
       mn_phys%stc = +99999.9
       mn_phys%slc = +99999.9
-
 
       mn_phys%sfalb_lnd = +99999.9
       mn_phys%emis_lnd = +99999.9
@@ -848,8 +845,9 @@ contains
 
       mn_phys%zorl = +99999.9
       mn_phys%zorll = +99999.9
-      mn_phys%zorlwav = +99999.9
+      mn_phys%zorli = +99999.9
       mn_phys%zorlw = +99999.9
+      mn_phys%zorlwav = +99999.9
 
       mn_phys%usfco = +99999.9
       mn_phys%vsfco = +99999.9
@@ -909,7 +907,6 @@ contains
       mn_phys%qrain = +99999.9
     end if
 
-
     if (move_noahmp) then
       mn_phys%soilcolor = +99999.9
       mn_phys%snowxy = +99999.9
@@ -958,12 +955,18 @@ contains
       mn_phys%hice = +99999.9
 
       !mn_phys%ustar1 = +99999.9
+
+      mn_phys%srflag = +99999.9
+      mn_phys%snodl  = +99999.9
+      mn_phys%weasdl = +99999.9
+      mn_phys%snodi  = +99999.9
+      mn_phys%weasdi = +99999.9
+
     endif
 
   end subroutine allocate_fv_moving_nest_physics_type
 
-
-  subroutine  deallocate_fv_moving_nest_physics_type(mn_phys)
+  subroutine deallocate_fv_moving_nest_physics_type(mn_phys)
     type(fv_moving_nest_physics_type), intent(inout) :: mn_phys
 
     if (allocated(mn_phys%ts)) then
@@ -999,8 +1002,9 @@ contains
 
       deallocate( mn_phys%zorl )
       deallocate( mn_phys%zorll )
-      deallocate( mn_phys%zorlwav )
+      deallocate( mn_phys%zorli )
       deallocate( mn_phys%zorlw )
+      deallocate( mn_phys%zorlwav )
 
       deallocate( mn_phys%usfco )
       deallocate( mn_phys%vsfco )
@@ -1107,6 +1111,12 @@ contains
       deallocate ( mn_phys%sncovr )
       deallocate ( mn_phys%fice )
       deallocate ( mn_phys%hice )
+
+      deallocate ( mn_phys%srflag )
+      deallocate ( mn_phys%snodl )
+      deallocate ( mn_phys%weasdl )
+      deallocate ( mn_phys%snodi )
+      deallocate ( mn_phys%weasdi )
 
     endif
 

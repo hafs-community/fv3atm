@@ -169,7 +169,6 @@ module fv_moving_nest_main_mod
 
 !  type(mn_surface_grids), save           :: mn_static
 
-
 contains
 
   !>@brief The subroutine 'update_moving_nest' decides whether the nest should be moved, and if so, performs the move.
@@ -310,8 +309,6 @@ contains
    deallocate(global_pelist)
  end subroutine update_moving_nest
 
-
-
   subroutine moving_nest_end()
     integer :: n
 
@@ -329,7 +326,6 @@ contains
     deallocate ( Atm(n)%gridstruct%sina_64 )
 
   end subroutine moving_nest_end
-
 
   ! This subroutine sits in this file to have access to Atm structure
   subroutine nest_tracker_init()
@@ -353,7 +349,126 @@ contains
     call deallocate_tracker(ngrids)
   end subroutine nest_tracker_end
 
+#ifdef LOG_LANDSEA
+  subroutine log_landsea_mask(Atm_block, GFS_control, GFS_sfcprop, time_step, parent_grid_num, child_grid_num)
+    type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
+    type(GFS_control_type), intent(in)   :: GFS_control   !< Physics metadata
+    type(GFS_sfcprop_type), intent(in)   :: GFS_sfcprop   !< Physics variable data
+    type(time_type), intent(in)          :: time_step     !< Current timestep
+    integer, intent(in)                  :: parent_grid_num, child_grid_num
 
+    character(len=160)  :: line
+    character(len=1)    :: mask_char
+    character(len=1)    :: num_char
+    integer :: i,j
+    integer :: nb, blen, ix, i_pe, j_pe, i_idx, j_idx, refine, im
+    integer :: ioffset, joffset
+    real    :: local_slmsk(Atm(2)%bd%isd:Atm(2)%bd%ied, Atm(2)%bd%jsd:Atm(2)%bd%jed)
+    integer :: nz, this_pe, n
+    integer :: num_land, num_water
+
+    this_pe = mpp_pe()
+    n = mygrid
+
+    refine = Atm(child_grid_num)%neststruct%refinement
+    ioffset = Atm(child_grid_num)%neststruct%ioffset
+    joffset = Atm(child_grid_num)%neststruct%joffset
+
+    do i=lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1)
+      line = ""
+      do j=lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
+        !print '("[INFO] WDR oro size npe=",I0," is_allocated=",L1)', this_pe, allocated(Atm(n)%oro)
+        !print '("[INFO] WDR oro size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(Atm(n)%oro,1), ubound(Atm(n)%oro,1), lbound(Atm(n)%oro,2), ubound(Atm(n)%oro,2)
+        if (Atm(n)%oro(i,j) .eq. 1) then
+          ! land
+          line = trim(line) // "+"
+        elseif (Atm(n)%oro(i,j) .eq. 2) then
+          ! Water
+          line = trim(line) // "."
+        else
+          ! Unknown
+          line = trim(line) // "X"
+        endif
+      enddo
+      !print '("[INFO] WDR oro npe=",I0," time=",I0," i=",I0," ",A80)',this_pe,a_step,i,trim(line)
+
+    enddo
+
+    local_slmsk = 8
+    !print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0," n=",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2), n
+    im = 0
+    do nb = 1,Atm_block%nblks
+      blen = Atm_block%blksz(nb)
+      do ix = 1, blen
+        i_pe = Atm_block%index(nb)%ii(ix)
+        j_pe = Atm_block%index(nb)%jj(ix)
+        im = im + 1
+
+        !print '("[INFO] WDR local_slmsk npe=",I0," i_pe=",I0," j_pe=",I0)', this_pe, i_pe, j_pe
+
+        local_slmsk(i_pe, j_pe) = GFS_sfcprop%slmsk(im)
+
+        if (allocated(Moving_nest)) then
+          if (allocated(Moving_nest(n)%mn_phys%slmsk)) then
+            if (int(local_slmsk(i_pe,j_pe)) .ne. 8) then
+              if (int(local_slmsk(i_pe,j_pe)) .ne. int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe))) then
+                print '("[INFO] WDR mismatch local_slmsk_lake npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," slmsk=",I0," phys%slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," GFS_sfcprop%landfrac=",F10.5," land_frac_grid=",F12.5," GFS_sfcprop%lakefrac=",F10.5," GFS_sfcprop%oceanfrac=",F10.5)', &
+                    this_pe,a_step,i_pe,j_pe, int(local_slmsk(i_pe,j_pe)), &
+                    int(Moving_nest(n)%mn_phys%slmsk(i_pe,j_pe)), &
+                    int(GFS_sfcprop%stype(im)), &
+                    int(mn_static%fp_ls%soil_type_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    GFS_sfcprop%landfrac(im), &
+                    int(mn_static%fp_ls%land_frac_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe)), &
+                    GFS_sfcprop%lakefrac(im), &
+                    GFS_sfcprop%oceanfrac(im)
+              endif
+            endif
+          endif
+        endif
+      enddo
+    enddo
+
+    print '("[INFO] WDR local_slmsk size npe=",I0," i=",I0,"-",I0," j=",I0,"-",I0)', this_pe, lbound(local_slmsk,1), ubound(local_slmsk,1), lbound(local_slmsk,2), ubound(local_slmsk,2)
+
+    line = ""
+    do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
+      write(num_char, "(I1)"), mod(j,10)
+      line = trim(line) // trim(num_char)
+    enddo
+    print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60)',this_pe,a_step,-99,trim(line)
+
+    do i=lbound(local_slmsk,1), ubound(local_slmsk,1)
+      line = ""
+      num_land = 0
+      num_water = 0
+
+      do j=lbound(local_slmsk,2), ubound(local_slmsk,2)
+
+        if (local_slmsk(i,j) .eq. 1) then
+          ! land
+          line = trim(line) // "+"
+          num_land = num_land + 1
+        elseif (local_slmsk(i,j) .eq. 2) then
+          ! Water
+          line = trim(line) // "T"
+        elseif (local_slmsk(i,j) .eq. 0) then
+          ! Zero == lake?
+          line = trim(line) // "."
+          num_water = num_water + 1
+        elseif (local_slmsk(i,j) .eq. 8) then
+          ! Missing/edge
+          line = trim(line) // "M"
+        else
+          ! Unknown
+          print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," j=",I3," slmsk=",E12.5)',this_pe,a_step,i,j, local_slmsk(i,j)
+          write (mask_char, "(I1)") int(local_slmsk(i,j))
+          line = trim(line) // mask_char
+        endif
+      enddo
+      print '("[INFO] WDR local_slmsk_lake npe=",I0," time=",I3," i=",I3," ",A60," ",I2," ",I2)',this_pe,a_step,i,trim(line), num_land, num_water
+    enddo
+  end subroutine log_landsea_mask
+#endif
 
   subroutine validate_geo_coords(tag, geo_grid, nest_geo_grid, refine, ioffset, joffset)
     character(len=*)                     :: tag
@@ -377,15 +492,12 @@ contains
 
   end subroutine validate_geo_coords
 
-
-
   subroutine validate_navigation_fields(tag, Atm_block, GFS_control, GFS_sfcprop, parent_grid_num, child_grid_num)
     character(len=*)                     :: tag
     type(block_control_type), intent(in) :: Atm_block     !< Physics block layout
     type(GFS_control_type), intent(in)   :: GFS_control   !< Physics metadata
     type(GFS_sfcprop_type), intent(in)   :: GFS_sfcprop   !< Physics variable data
     integer, intent(in)                  :: parent_grid_num, child_grid_num
-
 
     character(len=160)  :: line
     character(len=1)    :: mask_char
@@ -437,7 +549,6 @@ contains
                     GFS_sfcprop%oceanfrac(im)
               endif
 
-
 !              if ((i_pe .eq. 149 .and. j_pe .eq. 169) .or.(i_pe .eq. 152 .and. j_pe .eq. 169) .or. int(local_slmsk(i_pe,j_pe)) .ne. int(mn_static%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe))) then
               if (int(local_slmsk(i_pe,j_pe)) .ne. int(Moving_nest(child_grid_num)%mn_static%fp_ls%ls_mask_grid((ioffset-1)*refine+i_pe, (joffset-1)*refine+j_pe))) then
                 print '("[INFO] WDR mismatch VALIDATE B tag=",A4," npe=",I0," time=",I3," i_pe=",I3," j_pe=",I3," GFS%slmsk=",I0," phys%slmsk=",I0," fp_slmsk=",I0," soil_type_grid=",I0," phys%soil_type=",I0," GFS_sfcprop%landfrac=",F10.5," land_frac_grid=",F12.5," GFS_sfcprop%lakefrac=",F10.5," GFS_sfcprop%oceanfrac=",F10.5)', &
@@ -459,7 +570,6 @@ contains
     enddo
 
   end subroutine validate_navigation_fields
-
 
   !>@brief The subroutine 'dump_moving_nest' outputs native grid format data to netCDF files
   !>@details This subroutine exports model variables using FMS IO to netCDF files if tsvar_out is set to .True.
@@ -918,7 +1028,6 @@ contains
       !!================================================================
       !! Step 1.1 -- Show the nest grids - (now removed)
       !!================================================================
-
 
       !!================================================================
       !! Step 1.2 -- Configure local variables
