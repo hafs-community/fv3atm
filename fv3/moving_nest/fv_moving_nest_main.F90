@@ -755,6 +755,7 @@ contains
 
     ! Parent tile data, saved between timesteps
     logical, save                          :: first_nest_move = .true.
+    logical, save                          :: read_nest_static = .false.
     type(grid_geometry), save              :: parent_geo
     type(grid_geometry), save              :: fp_super_tile_geo
 !    type(mn_surface_grids), save           :: mn_static
@@ -988,6 +989,10 @@ contains
         ! Also read in other static variables from the orography and surface files
 
         if (first_nest_move) then
+          ! Set read_nest_static = .true., which will be reset as .false. after first nest move.
+          ! This can be revisited, tested and turned off in the future, which might be a better choice.
+          if ( a_step .lt. 10*Moving_nest(n)%mn_flag%ntrack ) read_nest_static = .true.
+
           ! TODO Compute this more flexibly for multiple moving nests
           if (parent_tile .eq. 1) then
             static_nest_num = 8   ! Regional
@@ -1009,7 +1014,7 @@ contains
           call mn_static_read_ls(mn_static%fp_ls, Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
 
           ! Read static nest land sea mask fields
-          call mn_static_read_ls(mn_static%nest_ls, Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
+          if (read_nest_static) call mn_static_read_ls(mn_static%nest_ls, Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, Moving_nest(n)%mn_flag%terrain_smoother, filtered_terrain)
 
           !call validate_geo_coords("LAT", mn_static%fp_ls%geolat_grid, mn_static%nest_ls%geolat_grid, x_refine, ioffset, joffset)
           !call validate_geo_coords("LON", mn_static%fp_ls%geolon_grid, mn_static%nest_ls%geolon_grid, x_refine, ioffset, joffset)
@@ -1017,9 +1022,9 @@ contains
           !! Apply lakes to land mask based on land_frac and soil_type
           call mn_apply_lakes(mn_static%parent_ls)
           call mn_apply_lakes(mn_static%fp_ls)
-          call mn_apply_lakes(mn_static%nest_ls)
+          if (read_nest_static) call mn_apply_lakes(mn_static%nest_ls)
 
-          call mn_static_overwrite_ls_from_nest(mn_static%fp_ls, mn_static%nest_ls, x_refine, ioffset, joffset)
+          if (read_nest_static) call mn_static_overwrite_ls_from_nest(mn_static%fp_ls, mn_static%nest_ls, x_refine, ioffset, joffset)
 
           ! Initialize the land sea mask (slmsk) in the mn_phys structure
           !  Important this is done after adjusting for lakes!
@@ -1028,15 +1033,17 @@ contains
           ! Read in full panel fix data
           call mn_static_read_fix(mn_static%fp_fix, Atm(1)%npx, Atm(1)%npy, x_refine, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir), parent_tile, month)
           ! Read in nest fix data
-          call mn_static_read_fix(mn_static%nest_fix, Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, month)
+          if (read_nest_static) call mn_static_read_fix(mn_static%nest_fix, Atm(2)%npx, Atm(2)%npy, 1, Atm(2)%pelist, trim(Moving_nest(child_grid_num)%mn_flag%surface_dir) // "/..", static_nest_num, month)
 
           ! Overwrite fix data from nest initialization
-          call mn_static_overwrite_fix_from_nest(mn_static%fp_fix, mn_static%nest_fix, x_refine, ioffset, joffset)
+          if (read_nest_static) call mn_static_overwrite_fix_from_nest(mn_static%fp_fix, mn_static%nest_fix, x_refine, ioffset, joffset)
 
           ! The nest static grids are only used for this step; can safely deallocate them now.
-          call deallocate_land_mask_grids(mn_static%nest_ls)
-          call deallocate_fix_grids(mn_static%nest_fix)
+          if (read_nest_static) call deallocate_land_mask_grids(mn_static%nest_ls)
+          if (read_nest_static) call deallocate_fix_grids(mn_static%nest_fix)
 
+          ! Reset to .false. after first_nest_move
+          read_nest_static = .false.
         endif
 
       endif
