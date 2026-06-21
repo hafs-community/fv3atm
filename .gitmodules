@@ -9,11 +9,11 @@
 [submodule "ccpp/physics"]
   path = ccpp/physics
   url = https://github.com/hafs-community/ccpp-physics
-  branch = production/hafs.v2.2
+  branch = production/hafs.v2.3
 [submodule "upp"]
   path = upp
   url = https://github.com/NOAA-EMC/UPP
-  branch = production/hafs.v2.2
+  branch = production/hafs.v2.3
 [submodule "mpas/MPAS-Model"]
   path = mpas/MPAS-Model
   url = https://github.com/ufs-community/MPAS-Model.git
