@@ -103,9 +103,7 @@ module fv_moving_nest_utils_mod
 
   logical :: debug_log = .false.
 
-
 #include <fms_platform.h>
-
 
   interface alloc_read_data
 #ifdef OVERLOAD_R8
@@ -125,7 +123,6 @@ module fv_moving_nest_utils_mod
     module procedure fill_nest_halos_from_parent_r8_3d_lowhighz
     module procedure fill_nest_halos_from_parent_r8_4d
   end interface fill_nest_halos_from_parent
-
 
   interface alloc_halo_buffer
     module procedure alloc_halo_buffer_r4_2d
@@ -212,7 +209,6 @@ contains
   !                                             S (i-1,j+1) +
   !                                             S (i-1,j-1) )
 
-
   subroutine smooth_5_point(data_var, i, j, val)
     real, allocatable, intent(in)               :: data_var(:,:)
     integer                                     :: i,j
@@ -227,7 +223,6 @@ contains
     endif
 
   end subroutine smooth_5_point
-
 
   subroutine smooth_9_point(data_var, i, j, val)
     real, allocatable, intent(in)               :: data_var(:,:)
@@ -306,7 +301,6 @@ contains
 
       enddo
     enddo
-
 
     ! From tools/fv_surf_map.F90::surfdrv()
     if ( Atm%flagstruct%full_zs_filter ) then
@@ -458,7 +452,6 @@ contains
 
   end subroutine fill_nest_halos_from_parent_r4_2d
 
-
   subroutine fill_nest_halos_from_parent_r8_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
@@ -469,7 +462,6 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position
-
 
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -517,8 +509,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_r8_2d
 
-
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
     integer, intent(in)                         :: interp_type
@@ -532,6 +523,10 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in), optional                :: missing_val
+
+    !Local variables
+    real*8                                      :: missloc_val
 
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -540,6 +535,12 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    if (present(missing_val)) then
+      missloc_val = missing_val
+    else
+      missloc_val = default_val
+    endif
 
     this_pe = mpp_pe()
 
@@ -565,10 +566,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
 
     endif
 
@@ -579,7 +580,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_const
 
-  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_2d_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:)
     integer, intent(in)                         :: interp_type
@@ -592,8 +593,11 @@ contains
     real, allocatable, intent(in)             :: mask_var(:,:)
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in), optional   :: missing_grid(:,:)
 
+    !local variables
+    real*8, allocatable                         :: missloc_grid(:,:)
     real*8, dimension(:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
     type(bbox)                          :: south_fine, south_coarse
@@ -601,6 +605,13 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    allocate(missloc_grid, source=default_grid)
+    if  (present(missing_grid)) then
+      missloc_grid = missing_grid
+    else
+      missloc_grid = default_grid
+    endif
 
     this_pe = mpp_pe()
 
@@ -626,10 +637,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
 
     endif
 
@@ -637,13 +648,11 @@ contains
     deallocate(sbuffer)
     deallocate(ebuffer)
     deallocate(wbuffer)
+    deallocate(missloc_grid)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_2d_2d
 
-
-
-
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -657,18 +666,24 @@ contains
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in), optional                :: missing_val
 
+    ! Local variables
     real*8                          :: default_vector(low_z:high_z)
+    real*8                          :: missloc_vector(low_z:high_z)
 
     default_vector = default_val
+    if (present(missing_val)) then
+      missloc_vector = missing_val
+    else
+      missloc_vector = default_val
+    endif
 
-    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector)
+    call fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_vector, missloc_vector)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_const
 
-
-
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -682,6 +697,10 @@ contains
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val(low_z:high_z)
+    real*8, intent(in), optional                :: missing_val(low_z:high_z)
+
+    ! Local variables
+    real*8                                      :: missloc_val(low_z:high_z)
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -690,6 +709,12 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    if (present(missing_val)) then
+      missloc_val = missing_val
+    else
+      missloc_val = default_val
+    endif
 
     this_pe = mpp_pe()
 
@@ -715,10 +740,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missloc_val)
 
     endif
 
@@ -729,8 +754,7 @@ contains
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_1d
 
-
-  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, low_z, high_z, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     character(len=*), intent(in)                :: var_name
     real*8, allocatable, intent(inout)          :: data_var(:,:,:)
     integer, intent(in)                         :: interp_type
@@ -743,7 +767,11 @@ contains
     real, allocatable, intent(in)             :: mask_var(:,:)
     real, allocatable, intent(in)             :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in), optional   :: missing_grid(:,:)
+
+    ! Local variables
+    real*8, allocatable                         :: missloc_grid(:,:)
 
     real*8, dimension(:,:,:), allocatable :: nbuffer, sbuffer, ebuffer, wbuffer
     type(bbox)                          :: north_fine, north_coarse
@@ -752,6 +780,13 @@ contains
     type(bbox)                          :: west_fine, west_coarse
     integer                             :: this_pe
     integer                             :: nest_level = 1  ! TODO allow to vary
+
+    allocate(missloc_grid, source=default_grid)
+    if (present(missing_grid)) then
+      missloc_grid = missing_grid
+    else
+      missloc_grid = default_grid
+    endif
 
     this_pe = mpp_pe()
 
@@ -777,10 +812,10 @@ contains
       !!
       !!===========================================================
 
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
-      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, nbuffer, north_fine, north_coarse, low_z, high_z, NORTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, sbuffer, south_fine, south_coarse, low_z, high_z, SOUTH, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, ebuffer, east_fine, east_coarse, low_z, high_z, EAST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
+      call fill_nest_from_buffer_masked(var_name, interp_type, data_var, wbuffer, west_fine, west_coarse, low_z, high_z, WEST, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missloc_grid)
 
     endif
 
@@ -788,10 +823,9 @@ contains
     deallocate(sbuffer)
     deallocate(ebuffer)
     deallocate(wbuffer)
+    deallocate(missloc_grid)
 
   end subroutine fill_nest_halos_from_parent_masked_r8_3d_lowhighz_2d
-
-
 
   subroutine fill_nest_halos_from_parent_r4_3d_highz(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
     character(len=*), intent(in)                :: var_name
@@ -803,7 +837,6 @@ contains
     logical, intent(in)                         :: is_fine_pe
     type(nest_domain_type), intent(inout)       :: nest_domain
     integer, intent(in)                         :: position, nz
-
 
     call fill_nest_halos_from_parent_r4_3d_lowhighz(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, 1, nz)
 
@@ -938,7 +971,6 @@ contains
 
   end subroutine fill_nest_halos_from_parent_r8_3d_lowhighz
 
-
   subroutine fill_nest_halos_from_parent_r4_4d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
     character(len=*), intent(in)                :: var_name
     real*4, allocatable, intent(inout)          :: data_var(:,:,:,:)
@@ -1002,7 +1034,6 @@ contains
     deallocate(wbuffer)
 
   end subroutine fill_nest_halos_from_parent_r4_4d
-
 
   subroutine fill_nest_halos_from_parent_r8_4d(var_name, data_var, interp_type, wt, ind, x_refine, y_refine, is_fine_pe, nest_domain, position, nz)
     character(len=*), intent(in)                :: var_name
@@ -1068,7 +1099,6 @@ contains
 
   end subroutine fill_nest_halos_from_parent_r8_4d
 
-
   !==================================================================================================
   !
   !  Allocate halo buffers
@@ -1094,7 +1124,6 @@ contains
 
   end subroutine alloc_halo_buffer_r8_2d
 
-
   subroutine alloc_halo_buffer_r4_2d(buffer, bbox_fine, bbox_coarse, nest_domain, direction, position)
     real*4, dimension(:,:), allocatable, intent(out) :: buffer
     type(bbox), intent(out)                          :: bbox_fine, bbox_coarse
@@ -1114,7 +1143,6 @@ contains
 
   end subroutine alloc_halo_buffer_r4_2d
 
-
   subroutine alloc_halo_buffer_r4_3d_highz(buffer, bbox_fine, bbox_coarse, nest_domain, direction, position, high_z)
     real*4, dimension(:,:,:), allocatable, intent(out) :: buffer
     type(bbox), intent(out)                            :: bbox_fine, bbox_coarse
@@ -1131,7 +1159,6 @@ contains
     type(nest_domain_type), intent(in)                 :: nest_domain
     integer, intent(in)                                :: direction, position, low_z, high_z
 
-
     call bbox_get_C2F_index(nest_domain, bbox_fine, bbox_coarse, direction,  position)
 
     if( bbox_coarse.ie .GE. bbox_coarse.is .AND. bbox_coarse.je .GE. bbox_coarse.js ) then
@@ -1144,7 +1171,6 @@ contains
     buffer = 0
 
   end subroutine alloc_halo_buffer_r4_3d_lowhighz
-
 
   subroutine alloc_halo_buffer_r8_3d_highz(buffer, bbox_fine, bbox_coarse, nest_domain, direction, position, high_z)
     real*8, dimension(:,:,:), allocatable, intent(out) :: buffer
@@ -1175,7 +1201,6 @@ contains
 
   end subroutine alloc_halo_buffer_r8_3d_lowhighz
 
-
   subroutine alloc_halo_buffer_r4_4d(buffer, bbox_fine, bbox_coarse, nest_domain, direction, position, nz, n4d)
     real*4, dimension(:,:,:,:), allocatable, intent(out) :: buffer
     type(bbox), intent(out)                              :: bbox_fine, bbox_coarse
@@ -1195,7 +1220,6 @@ contains
 
   end subroutine alloc_halo_buffer_r4_4d
 
-
   subroutine alloc_halo_buffer_r8_4d(buffer, bbox_fine, bbox_coarse, nest_domain, direction, position, nz, n4d)
     real*8, dimension(:,:,:,:), allocatable, intent(out) :: buffer
     type(bbox), intent(out)                              :: bbox_fine, bbox_coarse
@@ -1214,7 +1238,6 @@ contains
     buffer = 0
 
   end subroutine alloc_halo_buffer_r8_4d
-
 
   !==================================================================================================
   !
@@ -1307,7 +1330,6 @@ contains
     !call alloc_read_data(nc_filename, 'dy', super_nxp, super_ny, fp_tile_geo%dy)
     ! double area(ny, nx)
     !call alloc_read_data(nc_filename, 'area', super_nx, super_ny, fp_tile_geo%area)
-
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!
@@ -1407,7 +1429,6 @@ contains
 
   end subroutine alloc_read_data_r8_2d
 
-
   !==================================================================================================
   !
   !  NetCDF Function Section
@@ -1470,7 +1491,6 @@ contains
     mode = "write"
 
     if (open_file(fileobj, filename, mode, dom)) then
-
       if (new_file) then
         call register_axis(fileobj, dim_names(1), "x", CENTER)  ! TODO investigate handling of non-centered position
         call register_axis(fileobj, dim_names(2), "y", CENTER)  ! TODO investigate handling of non-centered position
@@ -1482,16 +1502,7 @@ contains
       call close_file(fileobj)
     endif
 
-!      if (.not. is_dimension_registered(fileobj, dim_names(1))) then
-!        call register_axis(fileobj, dim_names(1), "x")  ! TODO investigate handling of non-centered position
-!      endif
-!     if (.not. is_dimension_registered(fileobj, dim_names(2))) call register_axis(fileobj, dim_names(2), "y")  ! TODO investigate handling of non-centered position
-!      if (.not. is_dimension_registered(fileobj, trim(dim_names(3)))) then
-!        call register_axis(fileobj, trim(dim_names(3)), k)
-!      endif
-
   end subroutine output_grid_to_nc_3d
-
 
   subroutine output_grid_to_nc_2d(flag, istart, iend, jstart, jend, grid, file_str, var_name, time_step, dom, pos)
     implicit none
@@ -1546,8 +1557,6 @@ contains
     endif
 
   end subroutine output_grid_to_nc_2d
-
-
 
   !==================================================================================================
   !
@@ -1620,7 +1629,6 @@ contains
 
   end subroutine fill_grid_from_supergrid_r4_3d
 
-
   subroutine fill_grid_from_supergrid_r8_3d(in_grid, stagger_type, fp_super_tile_geo, ioffset, joffset, x_refine, y_refine)
     implicit none
     real*8, allocatable, intent(inout)  :: in_grid(:,:,:)
@@ -1685,7 +1693,6 @@ contains
     !call find_nest_alignment(tile_geo, fp_super_tile_geo, nest_x, nest_y, parent_x, parent_y)
 
   end subroutine fill_grid_from_supergrid_r8_3d
-
 
   subroutine fill_grid_from_supergrid_r8_4d(in_grid, stagger_type, fp_super_tile_geo, ioffset, joffset, x_refine, y_refine)
     implicit none
@@ -1752,7 +1759,6 @@ contains
 
   end subroutine fill_grid_from_supergrid_r8_4d
 
-
   !>@brief  This subroutine fills the nest halo data from the coarse grid data by downscaling.
   !>@details  Applicable to any interpolation type
 
@@ -1785,7 +1791,6 @@ contains
     end select
 
   end subroutine fill_nest_from_buffer_r4_2d
-
 
   !>@brief  This subroutine fills the nest halo data from the coarse grid data by downscaling.
   !>@details  Applicable to any interpolation type
@@ -1820,10 +1825,8 @@ contains
 
   end subroutine fill_nest_from_buffer_r8_2d
 
-
-  subroutine fill_nest_from_buffer_masked_r8_2d_const(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_from_buffer_masked_r8_2d_const(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     implicit none
-
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:)
@@ -1836,6 +1839,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_val
+    real*8, intent(in)                          :: missing_val
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1850,7 +1854,7 @@ contains
       print '("[WARN] fv_moving_nest_utils.F90 fill_nest_from_buffer_mask interp_type 4 not implemented. var_name=",A16)', var_name
       call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '2D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1860,9 +1864,8 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_2d_const
 
-  subroutine fill_nest_from_buffer_masked_r8_2d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_masked_r8_2d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
-
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:)
@@ -1874,7 +1877,8 @@ contains
     real, allocatable, intent(in)               :: mask_var(:,:)
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: missing_grid(:,:)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1889,7 +1893,7 @@ contains
       print '("[WARN] fv_moving_nest_utils.F90 fill_nest_from_buffer_mask interp_type 4 not implemented. var_name=",A16)', var_name
       call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '2D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1899,10 +1903,8 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_2d_2d
 
-
-  subroutine fill_nest_from_buffer_masked_r8_3d_1d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_vector)
+  subroutine fill_nest_from_buffer_masked_r8_3d_1d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_vector, missing_vector)
     implicit none
-
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:,:)
@@ -1915,6 +1917,7 @@ contains
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
     real*8, intent(in)                          :: default_vector(low_z:high_z)
+    real*8, intent(in)                          :: missing_vector(low_z:high_z)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1931,7 +1934,7 @@ contains
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
       !call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector, missing_vector)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1941,10 +1944,8 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_3d_1d
 
-
-  subroutine fill_nest_from_buffer_masked_r8_3d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_masked_r8_3d_2d(var_name, interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
-
     character(len=*), intent(in)                :: var_name
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:,:)
@@ -1956,7 +1957,8 @@ contains
     real, allocatable, intent(in)               :: mask_var(:,:)
     real, allocatable, intent(in)               :: parent_mask_var(:,:)
     integer, intent(in)                         :: mask_val
-    real, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: default_grid(:,:)
+    real*8, allocatable, intent(in)             :: missing_grid(:,:)
 
     integer   :: this_pe
     this_pe = mpp_pe()
@@ -1973,7 +1975,7 @@ contains
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
       !call fill_nest_from_buffer_cell_center("D", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     case (7)
-      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid)
+      call fill_nest_from_buffer_cell_center_masked(var_name, "A", x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid, missing_grid)
     case (9)
       !call fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, dir, wt)
       call mpp_error(FATAL, '3D fill_nest_from_buffer_nearest_neighbor not yet implemented.')
@@ -1983,11 +1985,8 @@ contains
 
   end subroutine fill_nest_from_buffer_masked_r8_3d_2d
 
-
-
   subroutine fill_nest_from_buffer_r4_3d_highz(interp_type, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*4, allocatable, intent(inout)          :: x(:,:,:)
     real*4, allocatable, intent(in)             :: buffer(:,:,:)
@@ -2003,7 +2002,6 @@ contains
 
   subroutine fill_nest_from_buffer_r4_3d_lowhighz(interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*4, allocatable, intent(inout)          :: x(:,:,:)
     real*4, allocatable, intent(in)             :: buffer(:,:,:)
@@ -2032,10 +2030,8 @@ contains
 
   end subroutine fill_nest_from_buffer_r4_3d_lowhighz
 
-
   subroutine fill_nest_from_buffer_r8_3d_highz(interp_type, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:,:)
     real*8, allocatable, intent(in)             :: buffer(:,:,:)
@@ -2051,7 +2047,6 @@ contains
 
   subroutine fill_nest_from_buffer_r8_3d_lowhighz(interp_type, x, buffer, bbox_fine, bbox_coarse, low_z, high_z, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:,:)
     real*8, allocatable, intent(in)             :: buffer(:,:,:)
@@ -2080,13 +2075,11 @@ contains
 
   end subroutine fill_nest_from_buffer_r8_3d_lowhighz
 
-
   !>@brief  This subroutine fills the nest halo data from the coarse grid data by downscaling.
   !>@details  Applicable to any interpolation type
 
   subroutine fill_nest_from_buffer_r4_4d(interp_type, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*4, allocatable, intent(inout)          :: x(:,:,:,:)
     real*4, allocatable, intent(in)             :: buffer(:,:,:,:)
@@ -2115,10 +2108,8 @@ contains
 
   end subroutine fill_nest_from_buffer_r4_4d
 
-
   subroutine fill_nest_from_buffer_r8_4d(interp_type, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
-
     integer, intent(in)                         :: interp_type
     real*8, allocatable, intent(inout)          :: x(:,:,:,:)
     real*8, allocatable, intent(in)             :: buffer(:,:,:,:)
@@ -2146,7 +2137,6 @@ contains
     end select
 
   end subroutine fill_nest_from_buffer_r8_4d
-
 
   !>@brief  This subroutine fills the nest halo data from the coarse grid data by downscaling.  It can accommodate all grid staggers, using the stagger variable.  [The routine needs to be renamed since "_from_cell_center" has become incorrect.)
   !>@details  Applicable to any interpolation type
@@ -2177,7 +2167,6 @@ contains
       dir_str = "ERR DIR"
     end select
 
-
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
@@ -2185,22 +2174,18 @@ contains
           !else if (stagger == "C") then
           !else if (stagger == "D") then
           !endif
-
           ic = ind(i,j,1)
           jc = ind(i,j,2)
-
           x(i,j) = &
               wt(i,j,1)*buffer(ic,  jc  ) +  &
               wt(i,j,2)*buffer(ic,  jc+1) +  &
               wt(i,j,3)*buffer(ic+1,jc+1) +  &
               wt(i,j,4)*buffer(ic+1,jc  )
-
         enddo
       enddo
     endif
 
   end subroutine fill_nest_from_buffer_cell_center_r4_2d
-
 
   subroutine fill_nest_from_buffer_cell_center_r8_2d(stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind)
     implicit none
@@ -2228,7 +2213,6 @@ contains
       dir_str = "ERR DIR"
     end select
 
-
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
@@ -2236,24 +2220,20 @@ contains
           !else if (stagger == "C") then
           !else if (stagger == "D") then
           !endif
-
           ic = ind(i,j,1)
           jc = ind(i,j,2)
-
           x(i,j) = &
               wt(i,j,1)*buffer(ic,  jc  ) +  &
               wt(i,j,2)*buffer(ic,  jc+1) +  &
               wt(i,j,3)*buffer(ic+1,jc+1) +  &
               wt(i,j,4)*buffer(ic+1,jc  )
-
         enddo
       enddo
     endif
 
   end subroutine fill_nest_from_buffer_cell_center_r8_2d
 
-
-  subroutine fill_nest_from_buffer_cell_center_masked_2d_const(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val)
+  subroutine fill_nest_from_buffer_cell_center_masked_2d_const(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_val, missing_val)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2267,6 +2247,7 @@ contains
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val
     real*8, intent(in)                            :: default_val
+    real*8, intent(in)                            :: missing_val
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2296,111 +2277,40 @@ contains
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
-
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-          x(i,j) = 0.0
-          tw = 0.0
-          num_weights = 0
-
-! WDR Original -- seems like the wt values should range from 1-4, not all use wt(i,j,1)
-!  will likely alter land values of shifted physics fields in regression tests.
-!  old values were (slightly) incorrect -- averaged of the 4 nearby points instead of actual weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,1)
-
-
-! Intermediate: Corrected the weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,2)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,3)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,4)
-
-
-!          print '("[INFO] MASK2D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-          !if (this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK2D SNOWXY npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-
-          ! Note that weights don't seem to always be exactly 0.0 when the corner points are aligned
-          ! Use the land sea mask to choose which points to add to weight and buffer
-          if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. 0.0001 ) then
-            num_weights = num_weights + 1
-            x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-            tw = tw + wt(i,j,1)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
-
-          endif
-
-          if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. 0.0001) then
-            num_weights = num_weights + 2
-            x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-            tw = tw + wt(i,j,2)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
-          endif
-
-          if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
-            num_weights = num_weights + 4
-            x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-            tw = tw + wt(i,j,3)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
-          endif
-
-          if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
-            num_weights = num_weights + 8
-            x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-            tw = tw + wt(i,j,4)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
-
-          endif
-
-
-          if (tw .gt. 0.0) then
-            x(i,j) = x(i,j) / tw
-          else
-            num_reset = num_reset + 1
-            dummy_val = buffer(ic, jc)
-            dummy_mask = mask_var(i,j)
+          ! Initialize with missing value
+          x(i,j) = missing_val
+          ! Search if same mask
+          if (mask_var(i,j) .eq. mask_val) then
+            ic = ind(i,j,1)
+            jc = ind(i,j,2)
+            ! Set default value
             x(i,j) = default_val
+            tw = -1.0
+            ! Searching order: 1, 2, 4, 3
+            if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+              tw = wt(i,j,1)
+              x(i,j) = buffer(ic,jc)
+            endif
+            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+              tw = wt(i,j,2)
+              x(i,j) = buffer(ic,jc+1)
+            endif
+            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+              tw = wt(i,j,4)
+              x(i,j) = buffer(ic+1,jc)
+            endif
+            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+              tw = wt(i,j,3)
+              x(i,j) = buffer(ic+1,jc+1)
+            endif
           endif
-
-          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_const npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
-
-
         enddo
       enddo
     endif
 
-!    if (.not. isnan(dummy_val)) print '("[INFO] WDR fill_nest_from_buffer_cell_center_masked npe=",I0," num_reset=",I0," var=",A12," mask_var=",F10.4," dummy_val=",F14.4," ",E15.8)', mpp_pe(), num_reset, trim(var_name), dummy_mask, dummy_val, dummy_val
-
   end subroutine fill_nest_from_buffer_cell_center_masked_2d_const
 
-  subroutine fill_nest_from_buffer_cell_center_masked_2d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid)
+  subroutine fill_nest_from_buffer_cell_center_masked_2d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2413,7 +2323,8 @@ contains
     real, allocatable, intent(in)                 :: mask_var(:,:)
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val
-    real, allocatable, intent(in)                 :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: missing_grid(:,:)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2444,100 +2355,34 @@ contains
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
 
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-          x(i,j) = 0.0
-          tw = 0.0
-          num_weights = 0
-
-! WDR Original -- seems like the wt values should range from 1-4, not all use wt(i,j,1)
-!  will likely alter land values of shifted physics fields in regression tests.
-!  old values were (slightly) incorrect -- averaged of the 4 nearby points instead of actual weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,1)
-
-
-! Intermediate: Corrected the weights
-!          if (buffer(ic,jc) .gt. -1.0)     x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-!          if (buffer(ic,jc+1) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-!          if (buffer(ic+1,jc) .gt. -1.0)   x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-!
-!          if (buffer(ic,jc) .gt. -1.0)     tw = tw + wt(i,j,1)
-!          if (buffer(ic,jc+1) .gt. -1.0)   tw = tw + wt(i,j,2)
-!          if (buffer(ic+1,jc+1) .gt. -1.0) tw = tw + wt(i,j,3)
-!          if (buffer(ic+1,jc) .gt. -1.0)   tw = tw + wt(i,j,4)
-
-
-!          print '("[INFO] MASK2D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-
-
-          ! Note that weights don't seem to always be exactly 0.0 when the corner points are aligned
-          ! Use the land sea mask to choose which points to add to weight and buffer
-          if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. 0.0001 ) then
-            num_weights = num_weights + 1
-            x(i,j) = x(i,j) + wt(i,j,1)*buffer(ic,  jc  )
-            tw = tw + wt(i,j,1)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY AA npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc, buffer(ic,jc), i, j, x(i,j), tw, wt(i,j,1)
-
-          endif
-
-          if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. 0.0001) then
-            num_weights = num_weights + 2
-            x(i,j) = x(i,j) + wt(i,j,2)*buffer(ic,  jc+1)
-            tw = tw + wt(i,j,2)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY BB npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic, jc+1, buffer(ic,jc+1), i, j, x(i,j), tw, wt(i,j,2)
-          endif
-
-          if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. 0.0001) then
-            num_weights = num_weights + 4
-            x(i,j) = x(i,j) + wt(i,j,3)*buffer(ic+1,jc+1)
-            tw = tw + wt(i,j,3)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY CC npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10,",",E12.5," parent_mask(",I0,",",I0,")=",F8.3)', this_pe, num_weights, ic+1, jc+1, buffer(ic+1,jc+1), i, j, x(i,j), tw, wt(i,j,3), wt(i,j,3), ic+1, jc+1, parent_mask_var(ic+1, jc+1)
-          endif
-
-          if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. 0.0001) then
-            num_weights = num_weights + 8
-            x(i,j) = x(i,j) + wt(i,j,4)*buffer(ic+1,jc  )
-            tw = tw + wt(i,j,4)
-
-            !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY DD npe=",I0," num_weights=",I0," buffer(",I0,",",I0,")=",E12.5," snowxy(",I0,",",I0,")=",E12.5," tw=",F8.5," wt=",F14.10)', this_pe, num_weights, ic+1, jc, buffer(ic+1,jc), i, j, x(i,j), tw, wt(i,j,4)
-
-          endif
-
-
-          if (tw .gt. 0.0) then
-            x(i,j) = x(i,j) / tw
-          else
-            num_reset = num_reset + 1
-            dummy_val = buffer(ic, jc)
-            dummy_mask = mask_var(i,j)
+          ! Initialize with missing value
+          x(i,j) = missing_grid(i,j)
+          ! Search if same mask
+          if (mask_var(i,j) .eq. mask_val) then
+            ic = ind(i,j,1)
+            jc = ind(i,j,2)
+            ! Set default value
             x(i,j) = default_grid(i,j)
+            tw = -1.0
+            ! Searching order: 1, 2, 4, 3
+
+            if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+              tw = wt(i,j,1)
+              x(i,j) = buffer(ic,jc)
+            endif
+            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+              tw = wt(i,j,2)
+              x(i,j) = buffer(ic,jc+1)
+            endif
+            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+              tw = wt(i,j,4)
+              x(i,j) = buffer(ic+1,jc)
+            endif
+            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+              tw = wt(i,j,3)
+              x(i,j) = buffer(ic+1,jc+1)
+            endif
           endif
-
-          !if ( this_pe .eq. 89 .and. trim(var_name) .eq. "snowxy") print '("[INFO] MASK_SNOWXY 2d_2d npe=",I0," num_weights=",I0," x(",I0,",",I0,")=",E12.5)', this_pe, num_weights, i, j, x(i,j)
-
-
         enddo
       enddo
     endif
@@ -2546,8 +2391,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_masked_2d_2d
 
-
-  subroutine fill_nest_from_buffer_cell_center_masked_3d_1d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector)
+  subroutine fill_nest_from_buffer_cell_center_masked_3d_1d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_vector, missing_vector)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2561,6 +2405,7 @@ contains
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val, low_z, high_z
     real*8, intent(in)                            :: default_vector(low_z:high_z)
+    real*8, intent(in)                            :: missing_vector(low_z:high_z)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2586,56 +2431,34 @@ contains
       do j=bbox_fine%js, bbox_fine%je
         do i=bbox_fine%is, bbox_fine%ie
 
-          ic = ind(i,j,1)
-          jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-
-
           do k=lbound(x,3), ubound(x,3)
-            x(i,j,k) = 0.0
-            tw = 0.0
 
-
-
-!            print '("[INFO] MASK3D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-
-            ! Use the land sea mask to choose which points to add to weight and buffer
-            if (parent_mask_var(ic,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,1)*buffer(ic,  jc ,k)
-              tw = tw + wt(i,j,1)
-            endif
-
-            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,2)*buffer(ic,  jc+1,k)
-              tw = tw + wt(i,j,2)
-            endif
-
-            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,3)*buffer(ic+1,jc+1,k)
-              tw = tw + wt(i,j,3)
-            endif
-
-            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,4)*buffer(ic+1,jc ,k)
-              tw = tw + wt(i,j,4)
-            endif
-
-
-            if (tw .gt. 0.0) then
-              x(i,j,k) = x(i,j,k) / tw
-            else
-              dummy_val = buffer(ic, jc,k)
-              dummy_mask = mask_var(i,j)
+            ! Initialize with missing value
+            x(i,j,k) = missing_vector(k)
+            ! Search if same mask
+            if (mask_var(i,j) .eq. mask_val) then
+              ic = ind(i,j,1)
+              jc = ind(i,j,2)
+              ! Set default value
               x(i,j,k) = default_vector(k)
+              tw = -1.0
+              ! Searching order: 1, 2, 4, 3
+              if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+                tw = wt(i,j,1)
+                x(i,j,k) = buffer(ic,jc,k)
+              endif
+              if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+                tw = wt(i,j,2)
+                x(i,j,k) = buffer(ic,jc+1,k)
+              endif
+              if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+                tw = wt(i,j,4)
+                x(i,j,k) = buffer(ic+1,jc,k)
+              endif
+              if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+                tw = wt(i,j,3)
+                x(i,j,k) = buffer(ic+1,jc+1,k)
+              endif
             endif
 
           enddo
@@ -2650,8 +2473,7 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_masked_3d_1d
 
-
-  subroutine fill_nest_from_buffer_cell_center_masked_3d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid)
+  subroutine fill_nest_from_buffer_cell_center_masked_3d_2d(var_name, stagger, x, buffer, bbox_fine, bbox_coarse, dir, x_refine, y_refine, wt, ind, mask_var, parent_mask_var, mask_val, low_z, high_z, default_grid, missing_grid)
     implicit none
     character(len=*), intent(in)                  :: var_name
     character ( len = 1 ), intent(in)             :: stagger
@@ -2664,7 +2486,8 @@ contains
     real, allocatable, intent(in)                 :: mask_var(:,:)
     real, allocatable, intent(in)                 :: parent_mask_var(:,:)
     integer, intent(in)                           :: mask_val, low_z, high_z
-    real, allocatable, intent(in)                 :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: default_grid(:,:)
+    real*8, allocatable, intent(in)               :: missing_grid(:,:)
 
     character(len=8)       :: dir_str
     integer                :: i, j, k, ic, jc
@@ -2692,54 +2515,34 @@ contains
 
           ic = ind(i,j,1)
           jc = ind(i,j,2)
-
-          !x(i,j) = &
-          !     wt(i,j,1)*buffer(ic,  jc  ) +  &
-          !     wt(i,j,2)*buffer(ic,  jc+1) +  &
-          !     wt(i,j,3)*buffer(ic+1,jc+1) +  &
-          !     wt(i,j,4)*buffer(ic+1,jc  )
-
-          ! Land type
-          !if (mask_var(i,j) .eq. mask_val) then
-
-
           do k=lbound(x,3), ubound(x,3)
-            x(i,j,k) = 0.0
-            tw = 0.0
 
-
-
-!            print '("[INFO] MASK3D npe=",I0," ",A16," parent_mask_var(",I0,",",I0,")=",F15.5," mask_var(",I0,",",I0,")=",F15.5)', mpp_pe(), var_name, ic, jc, parent_mask_var(ic,jc), i, j, mask_var(i,j)
-
-
-            ! Use the land sea mask to choose which points to add to weight and buffer
-            if (parent_mask_var(ic,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,1)*buffer(ic,  jc ,k)
-              tw = tw + wt(i,j,1)
-            endif
-
-            if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,2)*buffer(ic,  jc+1,k)
-              tw = tw + wt(i,j,2)
-            endif
-
-            if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,3)*buffer(ic+1,jc+1,k)
-              tw = tw + wt(i,j,3)
-            endif
-
-            if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j)) then
-              x(i,j,k) = x(i,j,k) + wt(i,j,4)*buffer(ic+1,jc ,k)
-              tw = tw + wt(i,j,4)
-            endif
-
-
-            if (tw .gt. 0.0) then
-              x(i,j,k) = x(i,j,k) / tw
-            else
-              dummy_val = buffer(ic, jc,k)
-              dummy_mask = mask_var(i,j)
+            ! Initialize with missing value
+            x(i,j,k) = missing_grid(i,j)
+            ! Search if same mask
+            if (mask_var(i,j) .eq. mask_val) then
+              ic = ind(i,j,1)
+              jc = ind(i,j,2)
+              ! Set default value
               x(i,j,k) = default_grid(i,j)
+              tw = -1.0
+              ! Searching order: 1, 2, 4, 3
+              if (parent_mask_var(ic,jc) .eq. mask_var(i,j) .and. wt(i,j,1) .gt. tw) then
+                tw = wt(i,j,1)
+                x(i,j,k) = buffer(ic,jc,k)
+              endif
+              if (parent_mask_var(ic,jc+1) .eq. mask_var(i,j) .and. wt(i,j,2) .gt. tw) then
+                tw = wt(i,j,2)
+                x(i,j,k) = buffer(ic,jc+1,k)
+              endif
+              if (parent_mask_var(ic+1,jc) .eq. mask_var(i,j) .and. wt(i,j,4) .gt. tw) then
+                tw = wt(i,j,4)
+                x(i,j,k) = buffer(ic+1,jc,k)
+              endif
+              if (parent_mask_var(ic+1,jc+1) .eq. mask_var(i,j) .and. wt(i,j,3) .gt. tw) then
+                tw = wt(i,j,3)
+                x(i,j,k) = buffer(ic+1,jc+1,k)
+              endif
             endif
 
           enddo
@@ -2753,8 +2556,6 @@ contains
 !    endif
 
   end subroutine fill_nest_from_buffer_cell_center_masked_3d_2d
-
-
 
   subroutine fill_nest_from_buffer_cell_center_r4_3d_highz(stagger, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
@@ -2889,7 +2690,6 @@ contains
 
   end subroutine fill_nest_from_buffer_cell_center_r8_3d_lowhighz
 
-
   subroutine fill_nest_from_buffer_cell_center_r4_4d(stagger, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
     character ( len = 1 ), intent(in)             :: stagger
@@ -2917,7 +2717,6 @@ contains
       dir_str = "ERR DIR"
     end select
 
-
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do v=1,ubound(buffer,4)
         do k=1,nz
@@ -2938,7 +2737,6 @@ contains
     endif
 
   end subroutine fill_nest_from_buffer_cell_center_r4_4d
-
 
   subroutine fill_nest_from_buffer_cell_center_r8_4d(stagger, x, buffer, bbox_fine, bbox_coarse, nz, dir, x_refine, y_refine, wt, ind)
     implicit none
@@ -2967,7 +2765,6 @@ contains
       dir_str = "ERR DIR"
     end select
 
-
     if( bbox_coarse%ie .GE. bbox_coarse%is .AND. bbox_coarse%je .GE. bbox_coarse%js ) then
       do v=1,ubound(buffer,4)
         do k=1,nz
@@ -2988,7 +2785,6 @@ contains
     endif
 
   end subroutine fill_nest_from_buffer_cell_center_r8_4d
-
 
   subroutine fill_nest_from_buffer_nearest_neighbor(x, buffer, bbox_fine, bbox_coarse, nz, dir, wt)
     implicit none
@@ -3051,7 +2847,6 @@ contains
     endif
 
   end subroutine fill_nest_from_buffer_nearest_neighbor
-
 
   subroutine fill_weight_grid(atm_wt, new_wt)
     real, allocatable, intent(inout) :: atm_wt(:,:,:)
